@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliador Bancario - Advbox</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 640px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo h1 {
+            font-size: 24px;
+            color: #1f4e78;
+            font-weight: 700;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 14px;
+            margin-top: 6px;
+        }
+
+        .flash {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .flash.error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .upload-section {
+            margin-bottom: 24px;
+        }
+
+        .upload-section label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .upload-section .hint {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            border: 2px dashed #d1d5db;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+
+        .file-input-wrapper:hover {
+            border-color: #1f4e78;
+            background: #f0f7ff;
+        }
+
+        .file-input-wrapper.has-files {
+            border-color: #16a34a;
+            background: #f0fdf4;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+        }
+
+        .file-input-wrapper .icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .file-input-wrapper .text {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .file-input-wrapper .file-names {
+            margin-top: 8px;
+            font-size: 13px;
+            color: #16a34a;
+            font-weight: 500;
+        }
+
+        .divider {
+            height: 1px;
+            background: #e5e7eb;
+            margin: 24px 0;
+        }
+
+        .btn-submit {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: #1f4e78;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-submit:hover { background: #163b5c; }
+
+        .btn-submit:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+
+        .spinner {
+            display: none;
+            margin: 16px auto 0;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+
+        .spinner.active { display: block; }
+
+        .spinner .dots::after {
+            content: '';
+            animation: dots 1.5s steps(4, end) infinite;
+        }
+
+        @keyframes dots {
+            0%   { content: ''; }
+            25%  { content: '.'; }
+            50%  { content: '..'; }
+            75%  { content: '...'; }
+        }
+
+        .required { color: #dc2626; }
+
+        .optional {
+            font-weight: 400;
+            color: #999;
+            font-size: 12px;
+        }
+
+        .file-input-wrapper.drag-over {
+            border-color: #1f4e78;
+            background: #e0edfa;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 12px;
+            color: #999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo">
+                <h1>Conciliador Bancario</h1>
+                <p>Advbox &mdash; Conciliacao automatica de extratos</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+            {% endwith %}
+
+            <form id="form-conciliacao" action="/conciliar" method="POST" enctype="multipart/form-data">
+                <div class="upload-section">
+                    <label>Export do Financeiro do Advbox <span class="optional">(opcional)</span></label>
+                    <div class="hint">Arquivo .xlsx exportado do Advbox &mdash; sem ele, tudo vira "Criar" ou "Revisar"</div>
+                    <div class="file-input-wrapper" id="drop-advbox">
+                        <div class="icon">&#128196;</div>
+                        <div class="text">Clique ou arraste o arquivo .xlsx</div>
+                        <div class="file-names" id="advbox-names"></div>
+                        <input type="file" name="advbox" id="input-advbox" accept=".xlsx">
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="upload-section">
+                    <label>Extratos Bancarios <span class="required">*</span></label>
+                    <div class="hint">Arquivos .ofx (BB, Itau, Asaas) e/ou .pdf (Caixa) &mdash; multiplos permitidos</div>
+                    <div class="file-input-wrapper" id="drop-extratos">
+                        <div class="icon">&#127974;</div>
+                        <div class="text">Clique ou arraste os extratos (.ofx, .pdf)</div>
+                        <div class="file-names" id="extratos-names"></div>
+                        <input type="file" name="extratos" id="input-extratos" accept=".ofx,.pdf" multiple required>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+
+                <button type="submit" class="btn-submit" id="btn-submit">
+                    Conciliar
+                </button>
+                <div class="spinner" id="spinner">
+                    Processando conciliacao<span class="dots"></span>
+                </div>
+            </form>
+        </div>
+        <footer>F. Ferreira Advogados</footer>
+    </div>
+
+    <script>
+        function setupDropZone(wrapperId, inputId) {
+            const wrapper = document.getElementById(wrapperId);
+            const input = document.getElementById(inputId);
+            const namesDiv = wrapper.querySelector('.file-names');
+
+            // Atualiza visual ao selecionar via clique
+            input.addEventListener('change', () => updateNames(input, wrapper, namesDiv));
+
+            // Drag & drop
+            ['dragenter', 'dragover'].forEach(evt => {
+                wrapper.addEventListener(evt, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    wrapper.classList.add('drag-over');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(evt => {
+                wrapper.addEventListener(evt, e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    wrapper.classList.remove('drag-over');
+                });
+            });
+
+            wrapper.addEventListener('drop', e => {
+                const dt = new DataTransfer();
+                for (const file of e.dataTransfer.files) {
+                    dt.items.add(file);
+                }
+                input.files = dt.files;
+                updateNames(input, wrapper, namesDiv);
+            });
+        }
+
+        function updateNames(input, wrapper, namesDiv) {
+            if (input.files.length > 0) {
+                const names = Array.from(input.files).map(f => f.name).join(', ');
+                namesDiv.textContent = names;
+                wrapper.classList.add('has-files');
+            } else {
+                namesDiv.textContent = '';
+                wrapper.classList.remove('has-files');
+            }
+        }
+
+        setupDropZone('drop-advbox', 'input-advbox');
+        setupDropZone('drop-extratos', 'input-extratos');
+
+        // Loading state ao submeter
+        document.getElementById('form-conciliacao').addEventListener('submit', function() {
+            document.getElementById('btn-submit').disabled = true;
+            document.getElementById('btn-submit').textContent = 'Processando...';
+            document.getElementById('spinner').classList.add('active');
+        });
+    </script>
+</body>
+</html>

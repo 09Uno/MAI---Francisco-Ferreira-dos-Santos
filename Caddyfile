@@ -1,0 +1,3 @@
+francisco-ferreira.metodoadvdigital.com.br {
+	reverse_proxy francisco:80
+}

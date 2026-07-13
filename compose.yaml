@@ -1,0 +1,30 @@
+name: francisco
+
+services:
+  app:
+    build:
+      context: .
+    image: francisco-app:latest
+    container_name: francisco
+    hostname: francisco
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - francisco_uploads:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    external: true
+
+volumes:
+  francisco_uploads:
+    name: francisco_uploads
