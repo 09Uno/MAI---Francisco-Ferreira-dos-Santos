@@ -223,8 +223,23 @@ def carregar_caixa_pdf(caminho: str, conta: str) -> list[MovExtrato]:
     return movs
 
 
+def _patch_openpyxl():
+    """O Advbox gera xlsx com margens de página vazias que quebram o openpyxl."""
+    from openpyxl.descriptors import base as desc_base
+    if getattr(desc_base, '_patched', False):
+        return
+    _orig = desc_base._convert
+    def _safe(expected_type, value):
+        if expected_type is float and (value is None or (isinstance(value, str) and value.strip() == '')):
+            return 0.0
+        return _orig(expected_type, value)
+    desc_base._convert = _safe
+    desc_base._patched = True
+
+
 def carregar_advbox_export(caminho: str) -> list[dict]:
     """Lê o Excel exportado do Financeiro do Advbox e devolve os lançamentos."""
+    _patch_openpyxl()
     raw = pd.read_excel(caminho, sheet_name=0, header=None, engine="openpyxl")
     hdr = None
     for i, row in raw.iterrows():
