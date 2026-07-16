@@ -42,6 +42,54 @@ SETORES = [
     "TRABALHISTA",
 ]
 
+MAPA_CENTRO_CUSTO = {
+    "0. REPASSE DE CLIENTE": "REPASSE",
+    "0. DEVOLUÇÃO DE HONORÁRIOS": "REPASSE",
+    "1. REPASSE DE CLIENTE": "REPASSE",
+    "0. HONORÁRIOS DE PARCEIROS": "CESSÃO DE CRÉDITO",
+    "2. SALÁRIOS": "ADMINISTRATIVO",
+    "2. PRÓ-LABORE": "ADMINISTRATIVO",
+    "2. VALE TRANSPORTE": "ADMINISTRATIVO",
+    "2. VALE ALIMENTAÇÃO": "ADMINISTRATIVO",
+    "2. ADIANTAMENTOS": "ADMINISTRATIVO",
+    "2. BONIFICAÇÃO": "ADMINISTRATIVO",
+    "2. ACORDO DE SÓCIOS": "ADMINISTRATIVO",
+    "2. BENEFÍCIOS": "ADMINISTRATIVO",
+    "2. SEGURO DE VIDA": "ADMINISTRATIVO",
+    "2. SAÚDE OCUPACIONAL": "ADMINISTRATIVO",
+    "2. RESCISÃO DO CONTRATO DE TRABALHO": "ADMINISTRATIVO",
+    "2. REMUNERAÇÃO DE ADVOGADOS PRESTADORES DE SERVIÇO": "ADMINISTRATIVO",
+    "2. REMUNERAÇÃO DE PARCEIROS - PRESTADORES DE SERVIÇO": "ADMINISTRATIVO",
+    "3. FGTS": "ADMINISTRATIVO",
+    "4. IOF": "ADMINISTRATIVO",
+    "4. ISS": "ADMINISTRATIVO",
+    "4. INSS": "ADMINISTRATIVO",
+    "4. SIMPLES NACIONAL": "ADMINISTRATIVO",
+    "5. ALUGUEL": "ADMINISTRATIVO",
+    "5. ENERGIA ELÉTRICA": "ADMINISTRATIVO",
+    "5. ÁGUA": "ADMINISTRATIVO",
+    "5. INTERNET": "ADMINISTRATIVO",
+    "5. SOFTWARE E SISTEMAS": "ADMINISTRATIVO",
+    "5. CONTADOR": "ADMINISTRATIVO",
+    "5. PAGAMENTO DE FATURA": "ADMINISTRATIVO",
+    "5. SEGURO DO CARRO": "ADMINISTRATIVO",
+    "5. ANUIDADE OAB": "ADMINISTRATIVO",
+    "5. ESTACIONAMENTO": "ADMINISTRATIVO",
+    "5. SERVIÇOS DE COMODATO": "ADMINISTRATIVO",
+    "5. INFORMÁTICA": "ADMINISTRATIVO",
+    "6. CONFRATERNIZAÇÕES DO ESCRITÓRIO": "ADMINISTRATIVO",
+    "6. CURSOS E TREINAMENTOS": "ADMINISTRATIVO",
+    "6. INVESTIMENTO - SALA TATUAPÉ": "ADMINISTRATIVO",
+    "6. DIVISÃO DE LUCROS - MENSAL": "ADMINISTRATIVO",
+    "6. MATERIAIS DE LIMPEZA E ALIMENTAÇÃO": "ADMINISTRATIVO",
+    "6. PASSAGENS AÉREAS E RODOVIÁRIAS": "ADMINISTRATIVO",
+    "6. MANUTENÇÃO": "ADMINISTRATIVO",
+    "6. GASTOS COM O ESCRITÓRIO": "ADMINISTRATIVO",
+    "7. TAXAS BANCÁRIAS": "ADMINISTRATIVO",
+    "7. JUROS BANCÁRIOS": "ADMINISTRATIVO",
+    "TRANSFERÊNCIA ENTRE CONTAS": "ADMINISTRATIVO",
+}
+
 
 def _limpar_uploads_antigos():
     """Remove pastas com mais de 2 horas na pasta de uploads."""
@@ -158,6 +206,7 @@ def conciliar():
         })
 
     for i, l in enumerate(novos):
+        cc = l.centro_custo or MAPA_CENTRO_CUSTO.get(l.categoria, "")
         itens.append({
             "id": f"c-{i}",
             "acao": "criar",
@@ -167,7 +216,7 @@ def conciliar():
             "conta": l.conta,
             "tipo": l.tipo,
             "categoria": l.categoria,
-            "centro_custo": l.centro_custo,
+            "centro_custo": cc,
             "setor": l.setor,
             "descricao_advbox": "",
             "pessoa": l.pessoa,
@@ -176,6 +225,7 @@ def conciliar():
         })
 
     for i, (mov, cat) in enumerate(revisao):
+        cc_rev = MAPA_CENTRO_CUSTO.get(cat or "", "")
         itens.append({
             "id": f"r-{i}",
             "acao": "revisar",
@@ -185,7 +235,7 @@ def conciliar():
             "conta": mov.conta,
             "tipo": mov.tipo,
             "categoria": cat or "",
-            "centro_custo": "",
+            "centro_custo": cc_rev,
             "setor": "",
             "descricao_advbox": "",
             "pessoa": "",
