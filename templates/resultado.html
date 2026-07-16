@@ -526,6 +526,8 @@
                             <th>Conta</th>
                             <th>Tipo</th>
                             <th>Categoria</th>
+                            <th>Centro de Custo</th>
+                            <th>Setor/Unidade</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -546,6 +548,22 @@
                                 <select class="cat-select" data-field="categoria">
                                     {% for cat in categorias %}
                                     <option value="{{ cat }}" {% if cat == it.categoria %}selected{% endif %}>{{ cat }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select class="cat-select" data-field="centro_custo">
+                                    <option value="">--</option>
+                                    {% for cc in centros_custo %}
+                                    <option value="{{ cc }}" {% if cc == it.centro_custo %}selected{% endif %}>{{ cc }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select class="cat-select" data-field="setor">
+                                    <option value="">--</option>
+                                    {% for s in setores %}
+                                    <option value="{{ s }}" {% if s == it.setor %}selected{% endif %}>{{ s }}</option>
                                     {% endfor %}
                                 </select>
                             </td>
@@ -584,6 +602,8 @@
                             <th>Conta</th>
                             <th>Tipo</th>
                             <th>Categoria</th>
+                            <th>Centro de Custo</th>
+                            <th>Setor/Unidade</th>
                             <th>Motivo</th>
                         </tr>
                     </thead>
@@ -606,6 +626,22 @@
                                     <option value="">-- selecione --</option>
                                     {% for cat in categorias %}
                                     <option value="{{ cat }}" {% if cat == it.categoria %}selected{% endif %}>{{ cat }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select class="cat-select" data-field="centro_custo">
+                                    <option value="">--</option>
+                                    {% for cc in centros_custo %}
+                                    <option value="{{ cc }}" {% if cc == it.centro_custo %}selected{% endif %}>{{ cc }}</option>
+                                    {% endfor %}
+                                </select>
+                            </td>
+                            <td>
+                                <select class="cat-select" data-field="setor">
+                                    <option value="">--</option>
+                                    {% for s in setores %}
+                                    <option value="{{ s }}" {% if s == it.setor %}selected{% endif %}>{{ s }}</option>
                                     {% endfor %}
                                 </select>
                             </td>

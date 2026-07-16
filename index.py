@@ -26,6 +26,15 @@ Como usar:
 import re
 import unicodedata
 from dataclasses import dataclass
+
+# Patch openpyxl para tolerar xlsx do Advbox com margens inválidas (string vazia ao invés de float)
+import openpyxl.descriptors.base as _desc
+_orig_convert = _desc._convert
+def _safe_convert(expected_type, value):
+    if expected_type is float and (value is None or (isinstance(value, str) and value.strip() == "")):
+        return 0.0
+    return _orig_convert(expected_type, value)
+_desc._convert = _safe_convert
 from datetime import datetime
 from typing import Optional
 
@@ -149,6 +158,7 @@ class Lancamento:
     vencimento: datetime; pagamento: Optional[datetime] = None
     pessoa: str = ""; processo: str = ""; registro_interno: bool = False
     origem: str = ""; revisar: str = ""
+    centro_custo: str = ""; setor: str = ""
 
 
 # -------------------------------------------------------------- DESDOBRAMENTO --
@@ -157,16 +167,17 @@ def desdobrar(mov: MovExtrato, categoria: str, perc: float = PERC_HONORARIOS_PAD
     hon = round(V * perc, 2)
     repasse = round(V - hon, 2)
     cat_hon = "1. HONORÁRIOS FINAIS" if categoria == "1. ALVARÁS" else categoria
-    base = dict(conta=mov.conta, vencimento=mov.data, pagamento=mov.data,
-                origem=f"desdobramento:{mov.descricao[:40]}")
+    _o = f"desdobramento:{mov.descricao[:40]}"
     return [
-        Lancamento(tipo="RECEITA", categoria=categoria, valor=V,
-                   descricao="Valor identificado", registro_interno=True,
-                   revisar="confirmar % de honorários e custas", **base),
-        Lancamento(tipo="RECEITA", categoria=cat_hon, valor=hon,
-                   descricao=f"{int(perc*100)}% honorários", **base),
-        Lancamento(tipo="DESPESA", categoria="0. REPASSE DE CLIENTE", valor=repasse,
-                   descricao="Repasse crédito de cliente", registro_interno=True, **base),
+        Lancamento(conta=mov.conta, tipo="RECEITA", categoria=categoria, valor=V,
+                   descricao="Valor identificado", vencimento=mov.data, pagamento=mov.data,
+                   registro_interno=True, revisar="confirmar % de honorários e custas", origem=_o),
+        Lancamento(conta=mov.conta, tipo="RECEITA", categoria=cat_hon, valor=hon,
+                   descricao=f"{int(perc*100)}% honorários", vencimento=mov.data,
+                   pagamento=mov.data, origem=_o),
+        Lancamento(conta=mov.conta, tipo="DESPESA", categoria="0. REPASSE DE CLIENTE", valor=repasse,
+                   descricao="Repasse crédito de cliente", vencimento=mov.data,
+                   pagamento=mov.data, registro_interno=True, origem=_o),
     ]
 
 

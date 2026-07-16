@@ -29,6 +29,19 @@ app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024  # 50 MB
 # Lista de categorias disponíveis (extraídas das regras)
 CATEGORIAS = sorted({cat for _, _, cat in engine._RULES})
 
+CENTROS_CUSTO = [
+    "ADMINISTRATIVO", "CESSÃO DE CRÉDITO", "CIVEL",
+    "PREVIDENCIARIO", "REPASSE", "TRABALHISTA",
+]
+
+SETORES = [
+    "ADMINISTRATIVO", "ADMINISTRATIVO - TATUAPÉ", "CESSÃO DE CRÉDITO",
+    "CIVEL", "COMERCIAL", "CONTROLADORIA JURÍDICA", "DIRETORIA",
+    "DOCUMENTOS", "FINANCEIRO", "LIMPEZA", "MARKETING",
+    "PREVIDENCIARIO", "RECEPÇÃO", "RECURSOS HUMANOS", "REPASSE",
+    "TRABALHISTA",
+]
+
 
 def _limpar_uploads_antigos():
     """Remove pastas com mais de 2 horas na pasta de uploads."""
@@ -136,6 +149,8 @@ def conciliar():
             "conta": mov.conta,
             "tipo": mov.tipo,
             "categoria": l.get("categoria", ""),
+            "centro_custo": l.get("centro_custo", ""),
+            "setor": l.get("setor", ""),
             "descricao_advbox": l.get("descricao", ""),
             "pessoa": l.get("pessoa", ""),
             "registro_interno": False,
@@ -152,6 +167,8 @@ def conciliar():
             "conta": l.conta,
             "tipo": l.tipo,
             "categoria": l.categoria,
+            "centro_custo": l.centro_custo,
+            "setor": l.setor,
             "descricao_advbox": "",
             "pessoa": l.pessoa,
             "registro_interno": l.registro_interno,
@@ -168,6 +185,8 @@ def conciliar():
             "conta": mov.conta,
             "tipo": mov.tipo,
             "categoria": cat or "",
+            "centro_custo": "",
+            "setor": "",
             "descricao_advbox": "",
             "pessoa": "",
             "registro_interno": False,
@@ -189,6 +208,8 @@ def conciliar():
     return render_template("resultado.html",
                            itens=itens,
                            categorias=CATEGORIAS,
+                           centros_custo=CENTROS_CUSTO,
+                           setores=SETORES,
                            total_extrato=len(extrato),
                            total_baixas=len(baixas),
                            total_novos=len(novos),
@@ -376,23 +397,27 @@ def _gerar_excel(run_dir, run_id, itens):
     # Criar
     ws = wb.create_sheet("CRIAR LANÇAMENTO")
     ws.sheet_properties.tabColor = _AZUL
-    cols_c = ["Conta", "Tipo", "Categoria", "Descrição", "Valor",
-              "Data", "Pessoa", "Registro interno"]
+    cols_c = ["Conta", "Tipo", "Categoria", "Centro de Custo", "Setor/Unidade",
+              "Descrição", "Valor", "Data", "Pessoa", "Registro interno"]
     ws.append(cols_c)
     for i in criar:
-        ws.append([i["conta"], i["tipo"], i["categoria"], i["descricao"],
-                   i["valor"], i["data"], i["pessoa"],
+        ws.append([i["conta"], i["tipo"], i["categoria"],
+                   i.get("centro_custo", ""), i.get("setor", ""),
+                   i["descricao"], i["valor"], i["data"], i["pessoa"],
                    "Sim" if i.get("registro_interno") else ""])
     estilo_header(ws, len(cols_c))
 
     # Revisar
     ws = wb.create_sheet("REVISAR")
     ws.sheet_properties.tabColor = "C00000"
-    cols_r = ["Data", "Valor", "Descrição", "Conta", "Tipo", "Sugestão", "Observação"]
+    cols_r = ["Data", "Valor", "Descrição", "Conta", "Tipo", "Sugestão",
+              "Centro de Custo", "Setor/Unidade", "Observação"]
     ws.append(cols_r)
     for i in revisar:
         ws.append([i["data"], i["valor"], i["descricao"], i["conta"],
-                   i["tipo"], i["categoria"], i["revisar_nota"]])
+                   i["tipo"], i["categoria"],
+                   i.get("centro_custo", ""), i.get("setor", ""),
+                   i["revisar_nota"]])
     estilo_header(ws, len(cols_r))
 
     # Estilo de corpo
