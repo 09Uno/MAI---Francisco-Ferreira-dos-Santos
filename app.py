@@ -487,11 +487,34 @@ def advbox_teste(run_id):
 
     ok = len(resultado["sucesso"]) > 0
     erro = resultado["erros"][0]["erro"] if resultado["erros"] else None
+    transaction_id = None
+    if ok and resultado["sucesso"]:
+        resp = resultado["sucesso"][0].get("resposta", {})
+        transaction_id = resp.get("id") or resp.get("transaction_id")
     return jsonify({
         "ok": ok,
         "erro": erro,
+        "transaction_id": transaction_id,
         "detalhes": resultado,
     })
+
+
+@app.route("/api/advbox/excluir/<int:transaction_id>", methods=["DELETE"])
+def advbox_excluir(transaction_id):
+    """Exclui um lançamento do Advbox (usado para desfazer teste)."""
+    client = _get_advbox_client()
+    if not client.configurado:
+        return jsonify({"ok": False, "erro": "Token não configurado"}), 400
+
+    old_dry = client.dry_run
+    client.dry_run = False
+    try:
+        client.excluir_lancamento(transaction_id)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
+    finally:
+        client.dry_run = old_dry
 
 
 @app.route("/download/<run_id>/<nome>")

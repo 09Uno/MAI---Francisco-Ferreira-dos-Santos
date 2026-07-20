@@ -817,9 +817,11 @@
             .then(r => r.json())
             .then(data => {
                 if (!data.configurado) {
-                    setModal('Erro de configuracao',
-                        '<div class="modal-warn">Token do Advbox nao configurado.<br>Adicione <code>ADVBOX_TOKEN=...</code> no arquivo <code>.env</code> do servidor.</div>',
-                        '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>'
+                    setModal('Token nao configurado',
+                        '<div class="modal-warn">Token do Advbox nao configurado.</div>' +
+                        '<p style="margin-top:12px">Acesse <a href="/configurar" style="color:#1f4e78;font-weight:600">Configurar Advbox</a> para inserir o token da API.</p>',
+                        '<a href="/configurar" class="btn btn-blue">Ir para Configuracao</a>' +
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar</button>'
                     );
                     return;
                 }
@@ -896,6 +898,8 @@
         }
 
         // ETAPA 3a — Testar com 1 item
+        let ultimoTesteId = null;
+
         function etapa3Teste() {
             const itens = getItensFinal();
             const primeiro = itens.find(i => i.acao === 'criar' && i.categoria);
@@ -918,19 +922,63 @@
             .then(data => {
                 let html = '';
                 if (data.ok) {
+                    ultimoTesteId = data.transaction_id;
                     html += '<div class="modal-stats"><div class="modal-stat" style="color:#2e7d32">Teste OK — item criado com sucesso no Advbox!</div></div>';
-                    html += '<p style="margin-top:12px">O item de teste foi criado no Advbox. Verifique no sistema se apareceu corretamente antes de enviar o restante.</p>';
+                    html += `<div style="margin-top:12px;padding:14px;background:#f0fdf4;border-radius:8px;font-size:14px">`;
+                    html += `<strong>O que fazer agora:</strong><ol style="margin:8px 0 0 20px">`;
+                    html += `<li>Abra o Advbox e verifique se o lancamento apareceu corretamente</li>`;
+                    html += `<li>Se estiver <strong>certo</strong> → clique em "Enviar os restantes"</li>`;
+                    html += `<li>Se estiver <strong>errado</strong> → clique em "Desfazer teste" para apagar do Advbox</li>`;
+                    html += `</ol></div>`;
                     const restante = getItensFinal().filter(i => i.acao === 'criar' && i.categoria && i.id !== primeiro.id).length;
-                    setModal('Teste concluido', html,
-                        '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar e verificar</button>' +
-                        (restante > 0 ? `<button type="button" class="btn btn-blue" onclick="enviarTodos()" style="margin-left:8px">Enviar os ${restante} restantes</button>` : '')
-                    );
+                    let footer = '';
+                    if (ultimoTesteId) {
+                        footer += '<button type="button" class="btn btn-outline" onclick="desfazerTeste()" id="btn-desfazer" style="color:#dc2626;border-color:#dc2626">Desfazer teste</button>';
+                    }
+                    footer += '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar e verificar</button>';
+                    if (restante > 0) {
+                        footer += `<button type="button" class="btn btn-blue" onclick="enviarTodos()" style="margin-left:8px">Enviar os ${restante} restantes</button>`;
+                    }
+                    setModal('Teste concluido', html, footer);
                 } else {
                     html += `<div class="modal-warn"><strong>Erro no teste:</strong> ${data.erro || 'Erro desconhecido'}</div>`;
                     html += '<p style="margin-top:12px">Corrija o problema antes de tentar enviar todos os itens.</p>';
                     setModal('Teste falhou', html,
                         '<button type="button" class="btn btn-outline" onclick="etapa2Preview()">Voltar</button>' +
                         '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar</button>'
+                    );
+                }
+            })
+            .catch(err => {
+                setModal('Erro', `<div class="modal-warn">Erro de conexao: ${err.message}</div>`,
+                    '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
+            });
+        }
+
+        // Desfazer teste — excluir o lancamento de teste do Advbox
+        function desfazerTeste() {
+            if (!ultimoTesteId) {
+                showToast('Nenhum item de teste para desfazer', 3000);
+                return;
+            }
+            const btn = document.getElementById('btn-desfazer');
+            if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
+
+            fetch('/api/advbox/excluir/' + ultimoTesteId, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    ultimoTesteId = null;
+                    setModal('Teste desfeito',
+                        '<div class="modal-stats"><div class="modal-stat" style="color:#2e7d32">Lancamento de teste excluido do Advbox com sucesso.</div></div>' +
+                        '<p style="margin-top:12px">Voce pode corrigir os dados e testar novamente.</p>',
+                        '<button type="button" class="btn btn-outline" onclick="etapa2Preview()">Voltar ao resumo</button>' +
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar</button>'
+                    );
+                } else {
+                    setModal('Erro ao desfazer',
+                        `<div class="modal-warn">${data.erro || 'Erro desconhecido'}</div><p style="margin-top:8px">Exclua manualmente o lancamento no Advbox.</p>`,
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>'
                     );
                 }
             })

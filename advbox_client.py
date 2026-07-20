@@ -204,6 +204,12 @@ class AdvboxClient:
         return self._request("PUT", f"/transactions/{transaction_id}", payload)
 
     # ----------------------------------------------------------------
+    # DELETE /transactions/{id} — excluir lançamento
+    # ----------------------------------------------------------------
+    def excluir_lancamento(self, transaction_id):
+        return self._request("DELETE", f"/transactions/{transaction_id}")
+
+    # ----------------------------------------------------------------
     # Operações em lote (com relatório)
     # ----------------------------------------------------------------
     def executar_conciliacao(self, itens):
