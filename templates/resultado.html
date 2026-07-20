@@ -680,36 +680,16 @@
     <!-- Toast -->
     <div class="toast" id="toast"></div>
 
-    <!-- Modal de confirmação do Advbox -->
+    <!-- Modal de integração Advbox (fluxo em etapas) -->
     <div class="modal-overlay" id="modal-advbox">
-        <div class="modal">
+        <div class="modal" style="max-width:700px">
             <div class="modal-header">
-                <h3>Enviar para o Advbox</h3>
+                <h3 id="modal-titulo">Integrar com Advbox</h3>
                 <button type="button" class="modal-close" onclick="fecharModal()">&times;</button>
             </div>
             <div class="modal-body" id="modal-body">
-                <!-- preenchido por JS -->
             </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>
-                <button type="button" class="btn btn-blue" id="btn-confirmar-envio" onclick="confirmarEnvio()">
-                    Confirmar e enviar
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal de resultado do envio -->
-    <div class="modal-overlay" id="modal-resultado">
-        <div class="modal">
-            <div class="modal-header">
-                <h3>Resultado do envio</h3>
-                <button type="button" class="modal-close" onclick="document.getElementById('modal-resultado').classList.remove('show')">&times;</button>
-            </div>
-            <div class="modal-body" id="modal-resultado-body">
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-green" onclick="document.getElementById('modal-resultado').classList.remove('show')">Fechar</button>
+            <div class="modal-footer" id="modal-footer">
             </div>
         </div>
     </div>
@@ -808,64 +788,167 @@
             });
         }
 
-        // ---- Modal Advbox ----
-        function abrirModalAdvbox() {
-            const itens = getItensFinal();
-            const baixas = itens.filter(i => i.acao === 'baixa');
-            const criar = itens.filter(i => i.acao === 'criar');
-            const revisar = itens.filter(i => i.acao === 'revisar');
-            const criarSemCat = criar.filter(i => !i.categoria);
+        // ---- Modal Advbox (fluxo em etapas) ----
+        let advboxSettings = null;
 
-            let totalValorCriar = criar.reduce((s, i) => s + i.valor, 0);
-
-            let html = '<div class="modal-summary">';
-            html += '<p>Voce esta prestes a enviar os seguintes itens para o Advbox:</p>';
-            html += '<div class="modal-stats">';
-
-            if (baixas.length > 0) {
-                html += `<div class="modal-stat">
-                    <span class="dot dot-green"></span>
-                    <strong>${baixas.length}</strong> lancamentos para <strong>dar baixa</strong>
-                    <span class="modal-hint">(marcar pagamento)</span>
-                </div>`;
-            }
-
-            html += `<div class="modal-stat">
-                <span class="dot dot-blue"></span>
-                <strong>${criar.length}</strong> lancamentos para <strong>criar</strong>
-                <span class="modal-hint">(R$ ${totalValorCriar.toLocaleString('pt-BR', {minimumFractionDigits: 2})})</span>
-            </div>`;
-
-            if (revisar.length > 0) {
-                html += `<div class="modal-stat modal-stat-warn">
-                    <span class="dot dot-red"></span>
-                    <strong>${revisar.length}</strong> itens em <strong>revisao</strong>
-                    <span class="modal-hint">(serao IGNORADOS &mdash; nao enviados)</span>
-                </div>`;
-            }
-
-            html += '</div>';
-
-            if (criarSemCat.length > 0) {
-                html += `<div class="modal-warn">
-                    <strong>Atencao:</strong> ${criarSemCat.length} item(ns) para criar estao sem categoria definida e serao ignorados.
-                </div>`;
-            }
-
-            html += '</div>';
-
-            document.getElementById('modal-body').innerHTML = html;
-            document.getElementById('modal-advbox').classList.add('show');
+        function setModal(titulo, bodyHtml, footerHtml) {
+            document.getElementById('modal-titulo').textContent = titulo;
+            document.getElementById('modal-body').innerHTML = bodyHtml;
+            document.getElementById('modal-footer').innerHTML = footerHtml;
         }
 
         function fecharModal() {
             document.getElementById('modal-advbox').classList.remove('show');
         }
 
-        function confirmarEnvio() {
-            const btn = document.getElementById('btn-confirmar-envio');
-            btn.disabled = true;
-            btn.textContent = 'Enviando...';
+        function fmtValor(v) {
+            return v.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+        }
+
+        // ETAPA 1 — Verificar conexao
+        function abrirModalAdvbox() {
+            setModal('Etapa 1/3 — Verificar conexao',
+                '<p>Verificando conexao com o Advbox...</p><div class="modal-stats"><div class="modal-stat">Aguarde...</div></div>',
+                '<button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>'
+            );
+            document.getElementById('modal-advbox').classList.add('show');
+
+            fetch('/api/advbox/status')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.configurado) {
+                    setModal('Erro de configuracao',
+                        '<div class="modal-warn">Token do Advbox nao configurado.<br>Adicione <code>ADVBOX_TOKEN=...</code> no arquivo <code>.env</code> do servidor.</div>',
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>'
+                    );
+                    return;
+                }
+                if (data.erro) {
+                    setModal('Erro de conexao',
+                        `<div class="modal-warn">${data.erro}</div>`,
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>'
+                    );
+                    return;
+                }
+
+                advboxSettings = data;
+                let html = '<div class="modal-stats">';
+                html += `<div class="modal-stat"><strong>${data.settings.contas}</strong> contas encontradas</div>`;
+                html += `<div class="modal-stat"><strong>${data.settings.categorias}</strong> categorias encontradas</div>`;
+                html += `<div class="modal-stat"><strong>${data.settings.centros_custo}</strong> centros de custo encontrados</div>`;
+                html += '</div>';
+                if (data.dry_run) {
+                    html += '<div class="modal-warn info-dry-run"><strong>MODO DRY RUN ATIVO</strong> — nenhum dado sera enviado de verdade ate desativar.</div>';
+                }
+                html += '<p style="margin-top:12px;color:#666">Conexao OK. Clique em "Continuar" para ver o resumo do envio.</p>';
+
+                setModal('Etapa 1/3 — Conexao verificada', html,
+                    '<button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>' +
+                    '<button type="button" class="btn btn-blue" onclick="etapa2Preview()">Continuar</button>'
+                );
+            })
+            .catch(err => {
+                setModal('Erro', `<div class="modal-warn">Erro de conexao: ${err.message}</div>`,
+                    '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
+            });
+        }
+
+        // ETAPA 2 — Preview detalhado
+        function etapa2Preview() {
+            const itens = getItensFinal();
+            const criar = itens.filter(i => i.acao === 'criar');
+            const revisar = itens.filter(i => i.acao === 'revisar');
+            const criarSemCat = criar.filter(i => !i.categoria);
+            const criarSemConta = criar.filter(i => !i.conta);
+            const criarOk = criar.filter(i => i.categoria);
+            const totalValor = criarOk.reduce((s, i) => s + i.valor, 0);
+
+            let html = '<div class="modal-stats">';
+            html += `<div class="modal-stat"><span class="dot dot-blue"></span><strong>${criarOk.length}</strong> lancamentos para <strong>criar</strong> — R$ ${fmtValor(totalValor)}</div>`;
+            if (revisar.length > 0) {
+                html += `<div class="modal-stat modal-stat-warn"><span class="dot dot-red"></span><strong>${revisar.length}</strong> em revisao — <strong>NAO serao enviados</strong></div>`;
+            }
+            html += '</div>';
+
+            if (criarSemCat.length > 0) {
+                html += `<div class="modal-warn"><strong>Atencao:</strong> ${criarSemCat.length} item(ns) sem categoria definida — serao ignorados.</div>`;
+            }
+            if (criarSemConta.length > 0) {
+                html += `<div class="modal-warn"><strong>Atencao:</strong> ${criarSemConta.length} item(ns) sem conta definida.</div>`;
+            }
+
+            if (criarOk.length > 0) {
+                html += '<div style="max-height:250px;overflow-y:auto;margin-top:12px"><table style="width:100%;font-size:13px;border-collapse:collapse">';
+                html += '<thead><tr style="background:#f5f5f5;text-align:left"><th style="padding:4px 8px">Descricao</th><th style="padding:4px 8px">Valor</th><th style="padding:4px 8px">Conta</th><th style="padding:4px 8px">Categoria</th><th style="padding:4px 8px">Centro Custo</th></tr></thead><tbody>';
+                criarOk.forEach(it => {
+                    html += `<tr style="border-top:1px solid #eee"><td style="padding:4px 8px">${it.descricao.substring(0,40)}</td><td style="padding:4px 8px;white-space:nowrap">R$ ${fmtValor(it.valor)}</td><td style="padding:4px 8px;font-size:11px">${it.conta || '—'}</td><td style="padding:4px 8px;font-size:11px">${it.categoria}</td><td style="padding:4px 8px;font-size:11px">${it.centro_custo || '—'}</td></tr>`;
+                });
+                html += '</tbody></table></div>';
+            }
+
+            let footer = '<button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>';
+            if (criarOk.length > 0) {
+                footer += '<button type="button" class="btn btn-outline" onclick="etapa3Teste()" style="margin-left:8px">Testar com 1 item</button>';
+                footer += '<button type="button" class="btn btn-blue" id="btn-enviar-todos" onclick="enviarTodos()" style="margin-left:8px">Enviar todos (${criarOk.length})</button>'.replace('${criarOk.length}', criarOk.length);
+            }
+
+            setModal('Etapa 2/3 — Resumo do envio', html, footer);
+        }
+
+        // ETAPA 3a — Testar com 1 item
+        function etapa3Teste() {
+            const itens = getItensFinal();
+            const primeiro = itens.find(i => i.acao === 'criar' && i.categoria);
+            if (!primeiro) {
+                showToast('Nenhum item valido para testar', 3000);
+                return;
+            }
+
+            setModal('Etapa 3/3 — Teste com 1 item',
+                `<p>Enviando item de teste para o Advbox...</p><div class="modal-stats"><div class="modal-stat"><strong>${primeiro.descricao.substring(0,50)}</strong> — R$ ${fmtValor(primeiro.valor)}</div></div>`,
+                '<button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>'
+            );
+
+            fetch('/api/advbox/teste/' + RUN_ID, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(primeiro)
+            })
+            .then(r => r.json())
+            .then(data => {
+                let html = '';
+                if (data.ok) {
+                    html += '<div class="modal-stats"><div class="modal-stat" style="color:#2e7d32">Teste OK — item criado com sucesso no Advbox!</div></div>';
+                    html += '<p style="margin-top:12px">O item de teste foi criado no Advbox. Verifique no sistema se apareceu corretamente antes de enviar o restante.</p>';
+                    const restante = getItensFinal().filter(i => i.acao === 'criar' && i.categoria && i.id !== primeiro.id).length;
+                    setModal('Teste concluido', html,
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar e verificar</button>' +
+                        (restante > 0 ? `<button type="button" class="btn btn-blue" onclick="enviarTodos()" style="margin-left:8px">Enviar os ${restante} restantes</button>` : '')
+                    );
+                } else {
+                    html += `<div class="modal-warn"><strong>Erro no teste:</strong> ${data.erro || 'Erro desconhecido'}</div>`;
+                    html += '<p style="margin-top:12px">Corrija o problema antes de tentar enviar todos os itens.</p>';
+                    setModal('Teste falhou', html,
+                        '<button type="button" class="btn btn-outline" onclick="etapa2Preview()">Voltar</button>' +
+                        '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar</button>'
+                    );
+                }
+            })
+            .catch(err => {
+                setModal('Erro', `<div class="modal-warn">Erro de conexao: ${err.message}</div>`,
+                    '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
+            });
+        }
+
+        // ETAPA 3b — Enviar todos
+        function enviarTodos() {
+            const btn = document.getElementById('btn-enviar-todos');
+            if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+
+            setModal('Enviando para o Advbox',
+                '<p>Enviando todos os itens... Nao feche esta janela.</p><div class="modal-stats"><div class="modal-stat">Aguarde...</div></div>',
+                ''
+            );
 
             fetch('/api/advbox/enviar/' + RUN_ID, {
                 method: 'POST',
@@ -874,28 +957,22 @@
             })
             .then(r => r.json())
             .then(data => {
-                fecharModal();
-
                 let html = '';
 
                 if (data.dry_run) {
-                    html += '<div class="modal-warn info-dry-run">';
-                    html += '<strong>MODO DRY RUN</strong> &mdash; nenhum dado foi enviado de verdade. ';
-                    html += 'Para enviar, mude <code>ADVBOX_DRY_RUN=false</code> no .env';
-                    html += '</div>';
+                    html += '<div class="modal-warn info-dry-run"><strong>MODO DRY RUN</strong> — nenhum dado foi enviado de verdade. Para enviar, mude <code>ADVBOX_DRY_RUN=false</code> no .env do servidor.</div>';
                 }
 
                 if (data.ok) {
                     const r = data.resultado;
-                    html += `<div class="modal-stats">`;
-                    html += `<div class="modal-stat"><strong>${r.sucesso}</strong> enviados com sucesso</div>`;
+                    html += '<div class="modal-stats">';
+                    if (r.sucesso > 0) html += `<div class="modal-stat" style="color:#2e7d32"><strong>${r.sucesso}</strong> enviados com sucesso</div>`;
                     if (r.erros > 0) html += `<div class="modal-stat modal-stat-warn"><strong>${r.erros}</strong> com erro</div>`;
                     if (r.ignorados > 0) html += `<div class="modal-stat"><strong>${r.ignorados}</strong> ignorados</div>`;
-                    html += `</div>`;
+                    html += '</div>';
 
-                    // Detalhes de erros
                     if (data.detalhes && data.detalhes.erros && data.detalhes.erros.length > 0) {
-                        html += '<div class="modal-errors"><strong>Erros:</strong><ul>';
+                        html += '<div class="modal-errors" style="margin-top:12px"><strong>Erros:</strong><ul>';
                         data.detalhes.erros.forEach(e => {
                             html += `<li><strong>${e.descricao || e.id}</strong>: ${e.erro}</li>`;
                         });
@@ -905,16 +982,12 @@
                     html += `<div class="modal-warn">${data.erro || 'Erro desconhecido'}</div>`;
                 }
 
-                document.getElementById('modal-resultado-body').innerHTML = html;
-                document.getElementById('modal-resultado').classList.add('show');
+                setModal(data.dry_run ? 'Resultado (DRY RUN)' : 'Envio concluido', html,
+                    '<button type="button" class="btn btn-green" onclick="fecharModal()">Fechar</button>');
             })
             .catch(err => {
-                fecharModal();
-                showToast('Erro de conexao: ' + err.message, 5000);
-            })
-            .finally(() => {
-                btn.disabled = false;
-                btn.textContent = 'Confirmar e enviar';
+                setModal('Erro', `<div class="modal-warn">Erro de conexao: ${err.message}</div>`,
+                    '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>');
             });
         }
 

@@ -412,6 +412,49 @@ def advbox_enviar(run_id):
     })
 
 
+@app.route("/api/advbox/teste/<run_id>", methods=["POST"])
+def advbox_teste(run_id):
+    """Envia apenas 1 item de teste para o Advbox (ignora DRY_RUN)."""
+    if not _sanitize(run_id):
+        return jsonify({"ok": False, "erro": "ID inválido"}), 400
+
+    run_dir = os.path.join(UPLOAD_FOLDER, run_id)
+    if not os.path.isdir(run_dir):
+        return jsonify({"ok": False, "erro": "Sessão expirada"}), 404
+
+    client = _get_advbox_client()
+    if not client.configurado:
+        return jsonify({"ok": False, "erro": "Token não configurado"}), 400
+
+    item = request.json
+    if not item:
+        return jsonify({"ok": False, "erro": "Sem dados"}), 400
+
+    try:
+        client.carregar_settings()
+    except Exception as e:
+        return jsonify({"ok": False, "erro": f"Erro settings: {e}"}), 500
+
+    old_dry = client.dry_run
+    client.dry_run = False
+    try:
+        resultado = client.executar_conciliacao([item])
+    finally:
+        client.dry_run = old_dry
+
+    log_path = os.path.join(run_dir, "advbox_teste.json")
+    with open(log_path, "w", encoding="utf-8") as f:
+        json.dump(resultado, f, ensure_ascii=False, indent=2, default=str)
+
+    ok = len(resultado["sucesso"]) > 0
+    erro = resultado["erros"][0]["erro"] if resultado["erros"] else None
+    return jsonify({
+        "ok": ok,
+        "erro": erro,
+        "detalhes": resultado,
+    })
+
+
 @app.route("/download/<run_id>/<nome>")
 def download(run_id, nome):
     if not _sanitize(run_id) or not _sanitize(nome):

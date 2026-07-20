@@ -156,13 +156,14 @@ class AdvboxClient:
     def criar_lancamento(self, tipo, categoria, descricao, valor,
                          data_vencimento, data_pagamento=None,
                          conta=None, pessoa=None, processo=None,
-                         registro_interno=False):
+                         registro_interno=False, centro_custo=None):
         """
         Cria um lançamento (receita ou despesa) no Advbox.
         Retorna a resposta da API (ou o payload em dry_run).
         """
         conta_id = self._resolver_id(self.contas, conta, "Conta")
         categoria_id = self._resolver_id(self.categorias, categoria, "Categoria")
+        cc_id = self._resolver_id(self.centros_custo, centro_custo, "Centro de custo")
 
         payload = {
             "type": tipo.lower(),  # "receita" ou "despesa"
@@ -176,6 +177,8 @@ class AdvboxClient:
             payload["account_id"] = conta_id
         if categoria_id:
             payload["category_id"] = categoria_id
+        if cc_id:
+            payload["cost_center_id"] = cc_id
         if data_pagamento:
             payload["payment_date"] = _formatar_data(data_pagamento)
         if pessoa:
@@ -269,6 +272,7 @@ class AdvboxClient:
                         conta=item.get("conta"),
                         pessoa=item.get("pessoa"),
                         registro_interno=item.get("registro_interno", False),
+                        centro_custo=item.get("centro_custo"),
                     )
                     resultados["sucesso"].append({
                         "id": item.get("id"),
