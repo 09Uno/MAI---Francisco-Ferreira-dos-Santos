@@ -42,10 +42,12 @@ class AdvboxClient:
         self.token = token or os.environ.get("ADVBOX_TOKEN", "")
         self.dry_run = dry_run
 
-        # Mapas nome→ID carregados do GET /settings
-        self.contas = {}        # nome da conta → ID
+        self.contas = {}        # nome da conta (banco) → ID
         self.categorias = {}    # nome da categoria → ID
         self.centros_custo = {} # nome do centro de custo → ID
+        self.departamentos = {} # nome do departamento/setor → ID
+        self.usuarios = []      # lista de {id, name}
+        self._default_user_id = None
         self._settings_raw = None
 
     @property
@@ -108,37 +110,54 @@ class AdvboxClient:
     # GET /settings — carrega mapas nome→ID
     # ----------------------------------------------------------------
     def carregar_settings(self):
-        """
-        Chama GET /settings e monta mapas de nome→ID para
-        contas, categorias e centros de custo.
-        """
         data = self._request("GET", "/settings")
         self._settings_raw = data
 
-        # Mapear contas
-        for conta in data.get("accounts", data.get("contas", [])):
-            nome = conta.get("name", conta.get("nome", ""))
-            cid = conta.get("id")
-            if nome and cid:
-                self.contas[nome.strip().upper()] = cid
+        # Usuários (top-level)
+        for u in data.get("users", []):
+            uid = u.get("id")
+            nome = u.get("name", "")
+            if uid:
+                self.usuarios.append({"id": uid, "name": nome})
+        if self.usuarios:
+            self._default_user_id = self.usuarios[0]["id"]
 
-        # Mapear categorias
-        for cat in data.get("categories", data.get("categorias", [])):
-            nome = cat.get("name", cat.get("nome", ""))
+        # Dados financeiros (aninhados em "financial")
+        fin = data.get("financial", {})
+
+        # Contas bancárias: financial.banks[].{id, name}
+        for banco in fin.get("banks", []):
+            nome = banco.get("name", "")
+            bid = banco.get("id")
+            if nome and bid:
+                self.contas[nome.strip().upper()] = bid
+
+        # Categorias: financial.categories[].{id, category, type}
+        for cat in fin.get("categories", []):
+            nome = cat.get("category", "")
             cid = cat.get("id")
             if nome and cid:
                 self.categorias[nome.strip().upper()] = cid
 
-        # Mapear centros de custo
-        for cc in data.get("cost_centers", data.get("centros_custo", [])):
-            nome = cc.get("name", cc.get("nome", ""))
+        # Centros de custo: financial.cost_centers[].{id, cost_center}
+        for cc in fin.get("cost_centers", []):
+            nome = cc.get("cost_center", "")
             cid = cc.get("id")
             if nome and cid:
                 self.centros_custo[nome.strip().upper()] = cid
 
+        # Departamentos/Setores: financial.departments[].{id, department}
+        for dep in fin.get("departments", []):
+            nome = dep.get("department", "")
+            did = dep.get("id")
+            if nome and did:
+                self.departamentos[nome.strip().upper()] = did
+
         logger.info(f"Settings carregados: {len(self.contas)} contas, "
                      f"{len(self.categorias)} categorias, "
-                     f"{len(self.centros_custo)} centros de custo")
+                     f"{len(self.centros_custo)} centros de custo, "
+                     f"{len(self.departamentos)} departamentos, "
+                     f"{len(self.usuarios)} usuários")
         return {
             "contas": len(self.contas),
             "categorias": len(self.categorias),
@@ -152,7 +171,6 @@ class AdvboxClient:
         key = nome.strip().upper()
         cid = mapa.get(key)
         if cid is None:
-            # Tenta match parcial
             for k, v in mapa.items():
                 if key in k or k in key:
                     return v
@@ -164,36 +182,37 @@ class AdvboxClient:
     # ----------------------------------------------------------------
     def criar_lancamento(self, tipo, categoria, descricao, valor,
                          data_vencimento, data_pagamento=None,
-                         conta=None, pessoa=None, processo=None,
-                         registro_interno=False, centro_custo=None):
-        """
-        Cria um lançamento (receita ou despesa) no Advbox.
-        Retorna a resposta da API (ou o payload em dry_run).
-        """
+                         conta=None, centro_custo=None, setor=None,
+                         **_kwargs):
         conta_id = self._resolver_id(self.contas, conta, "Conta")
         categoria_id = self._resolver_id(self.categorias, categoria, "Categoria")
         cc_id = self._resolver_id(self.centros_custo, centro_custo, "Centro de custo")
+        setor_id = self._resolver_id(self.departamentos, setor, "Setor")
+
+        entry_type = "income" if tipo.upper() in ("RECEITA", "INCOME") else "expense"
+
+        data_iso = _formatar_data(data_vencimento)
 
         payload = {
-            "type": tipo.lower(),  # "receita" ou "despesa"
-            "description": descricao,
-            "value": round(valor, 2),
-            "due_date": _formatar_data(data_vencimento),
-            "internal_record": registro_interno,
+            "entry_type": entry_type,
+            "description": descricao or "",
+            "amount": _formatar_valor(valor),
+            "date_due": data_iso,
+            "competence": _competencia(data_iso),
         }
 
+        if self._default_user_id:
+            payload["users_id"] = self._default_user_id
         if conta_id:
-            payload["account_id"] = conta_id
+            payload["debit_account"] = conta_id
         if categoria_id:
-            payload["category_id"] = categoria_id
+            payload["categories_id"] = categoria_id
         if cc_id:
-            payload["cost_center_id"] = cc_id
+            payload["cost_centers_id"] = cc_id
+        if setor_id:
+            payload["sectors_id"] = setor_id
         if data_pagamento:
-            payload["payment_date"] = _formatar_data(data_pagamento)
-        if pessoa:
-            payload["person_name"] = pessoa
-        if processo:
-            payload["lawsuit_number"] = processo
+            payload["date_payment"] = _formatar_data(data_pagamento)
 
         return self._request("POST", "/transactions", payload)
 
@@ -201,14 +220,11 @@ class AdvboxClient:
     # PUT /transactions/{id} — dar baixa (marcar pagamento)
     # ----------------------------------------------------------------
     def dar_baixa(self, transaction_id, data_pagamento, valor=None):
-        """
-        Marca um lançamento existente como pago.
-        """
         payload = {
-            "payment_date": _formatar_data(data_pagamento),
+            "date_payment": _formatar_data(data_pagamento),
         }
         if valor is not None:
-            payload["paid_value"] = round(valor, 2)
+            payload["amount"] = _formatar_valor(valor)
 
         return self._request("PUT", f"/transactions/{transaction_id}", payload)
 
@@ -222,14 +238,6 @@ class AdvboxClient:
     # Operações em lote (com relatório)
     # ----------------------------------------------------------------
     def executar_conciliacao(self, itens):
-        """
-        Executa a conciliação em lote:
-        - Itens com acao='baixa' → dar_baixa (se tiver ID do Advbox)
-        - Itens com acao='criar' → criar_lancamento
-        - Itens com acao='revisar' → IGNORADOS (nunca postar automaticamente)
-
-        Retorna dict com resultado de cada operação.
-        """
         resultados = {
             "sucesso": [],
             "erros": [],
@@ -285,9 +293,8 @@ class AdvboxClient:
                         data_vencimento=item.get("data"),
                         data_pagamento=item.get("data"),
                         conta=item.get("conta"),
-                        pessoa=item.get("pessoa"),
-                        registro_interno=item.get("registro_interno", False),
                         centro_custo=item.get("centro_custo"),
+                        setor=item.get("setor"),
                     )
                     resultados["sucesso"].append({
                         "id": item.get("id"),
@@ -312,18 +319,38 @@ class AdvboxClient:
         return resultados
 
 
+# ----------------------------------------------------------------
+# Helpers
+# ----------------------------------------------------------------
+
 def _formatar_data(data_str):
     """Converte dd/mm/yyyy para yyyy-mm-dd (formato da API)."""
     if not data_str:
         return None
     if isinstance(data_str, datetime):
         return data_str.strftime("%Y-%m-%d")
-    # Se já está no formato ISO
     if "-" in str(data_str) and len(str(data_str)) >= 10:
         return str(data_str)[:10]
-    # dd/mm/yyyy → yyyy-mm-dd
     try:
         parts = str(data_str).split("/")
         return f"{parts[2]}-{parts[1]}-{parts[0]}"
     except (IndexError, ValueError):
         return str(data_str)
+
+
+def _formatar_valor(valor):
+    """Converte float para formato brasileiro: 1500.50 → '1.500,50'"""
+    s = f"{abs(float(valor)):,.2f}"
+    s = s.replace(",", "X").replace(".", ",").replace("X", ".")
+    return f"-{s}" if float(valor) < 0 else s
+
+
+def _competencia(data_iso):
+    """Extrai competência MM/YYYY de uma data ISO yyyy-mm-dd."""
+    if not data_iso or len(str(data_iso)) < 7:
+        return None
+    parts = str(data_iso).split("-")
+    try:
+        return f"{parts[1]}/{parts[0]}"
+    except (IndexError, ValueError):
+        return None
