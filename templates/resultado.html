@@ -890,58 +890,89 @@
 
             let footer = '<button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>';
             if (criarOk.length > 0) {
-                footer += '<button type="button" class="btn btn-outline" onclick="etapa3Teste()" style="margin-left:8px">Testar com 1 item</button>';
-                footer += '<button type="button" class="btn btn-blue" id="btn-enviar-todos" onclick="enviarTodos()" style="margin-left:8px">Enviar todos (${criarOk.length})</button>'.replace('${criarOk.length}', criarOk.length);
+                const maxTeste = Math.min(criarOk.length, 10);
+                footer += '<span style="margin-left:12px;display:inline-flex;align-items:center;gap:6px">';
+                footer += '<select id="qtd-teste" style="padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px">';
+                [1, 3, 5, 10].forEach(n => {
+                    if (n <= maxTeste) footer += `<option value="${n}">${n}</option>`;
+                });
+                footer += '</select>';
+                footer += '<button type="button" class="btn btn-outline" onclick="etapa3Teste()">Testar amostra</button>';
+                footer += '</span>';
+                footer += `<button type="button" class="btn btn-blue" id="btn-enviar-todos" onclick="enviarTodos()" style="margin-left:8px">Enviar todos (${criarOk.length})</button>`;
             }
 
             setModal('Etapa 2/3 — Resumo do envio', html, footer);
         }
 
-        // ETAPA 3a — Testar com 1 item
-        let ultimoTesteId = null;
+        // ETAPA 3a — Testar com N itens
+        let testeIds = [];
+        let testeItensIds = [];
 
         function etapa3Teste() {
+            const qtdSel = document.getElementById('qtd-teste');
+            const qtd = qtdSel ? parseInt(qtdSel.value) : 1;
             const itens = getItensFinal();
-            const primeiro = itens.find(i => i.acao === 'criar' && i.categoria);
-            if (!primeiro) {
+            const amostra = itens.filter(i => i.acao === 'criar' && i.categoria).slice(0, qtd);
+            if (amostra.length === 0) {
                 showToast('Nenhum item valido para testar', 3000);
                 return;
             }
 
-            setModal('Etapa 3/3 — Teste com 1 item',
-                `<p>Enviando item de teste para o Advbox...</p><div class="modal-stats"><div class="modal-stat"><strong>${primeiro.descricao.substring(0,50)}</strong> — R$ ${fmtValor(primeiro.valor)}</div></div>`,
+            testeItensIds = amostra.map(i => i.id);
+            let listaHtml = '<div class="modal-stats">';
+            amostra.forEach(it => {
+                listaHtml += `<div class="modal-stat" style="font-size:13px"><strong>${it.descricao.substring(0,45)}</strong> — R$ ${fmtValor(it.valor)}</div>`;
+            });
+            listaHtml += '</div>';
+
+            setModal(`Etapa 3/3 — Testando ${amostra.length} ite${amostra.length === 1 ? 'm' : 'ns'}`,
+                `<p>Enviando para o Advbox...</p>${listaHtml}`,
                 '<button type="button" class="btn btn-outline btn-cancel" onclick="fecharModal()">Cancelar</button>'
             );
 
             fetch('/api/advbox/teste/' + RUN_ID, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(primeiro)
+                body: JSON.stringify(amostra)
             })
             .then(r => r.json())
             .then(data => {
                 let html = '';
                 if (data.ok) {
-                    ultimoTesteId = data.transaction_id;
-                    html += '<div class="modal-stats"><div class="modal-stat" style="color:#2e7d32">Teste OK — item criado com sucesso no Advbox!</div></div>';
+                    testeIds = data.transaction_ids || [];
+                    const ok = data.resultado.sucesso;
+                    const erros = data.resultado.erros;
+                    html += '<div class="modal-stats">';
+                    html += `<div class="modal-stat" style="color:#2e7d32"><strong>${ok}</strong> criado${ok !== 1 ? 's' : ''} com sucesso</div>`;
+                    if (erros > 0) html += `<div class="modal-stat" style="color:#dc2626"><strong>${erros}</strong> com erro</div>`;
+                    html += '</div>';
+
+                    if (data.erros && data.erros.length > 0) {
+                        html += '<div style="margin-top:8px;padding:10px;background:#fef2f2;border-radius:6px;font-size:13px"><strong>Erros:</strong><ul style="margin:4px 0 0 16px">';
+                        data.erros.forEach(e => { html += `<li>${e}</li>`; });
+                        html += '</ul></div>';
+                    }
+
                     html += `<div style="margin-top:12px;padding:14px;background:#f0fdf4;border-radius:8px;font-size:14px">`;
                     html += `<strong>O que fazer agora:</strong><ol style="margin:8px 0 0 20px">`;
-                    html += `<li>Abra o Advbox e verifique se o lancamento apareceu corretamente</li>`;
+                    html += `<li>Abra o Advbox e verifique se os lancamentos apareceram corretamente</li>`;
                     html += `<li>Se estiver <strong>certo</strong> → clique em "Enviar os restantes"</li>`;
-                    html += `<li>Se estiver <strong>errado</strong> → clique em "Desfazer teste" para apagar do Advbox</li>`;
+                    html += `<li>Se estiver <strong>errado</strong> → clique em "Desfazer teste" para apagar todos do Advbox</li>`;
                     html += `</ol></div>`;
-                    const restante = getItensFinal().filter(i => i.acao === 'criar' && i.categoria && i.id !== primeiro.id).length;
+
+                    const restante = getItensFinal().filter(i => i.acao === 'criar' && i.categoria && !testeItensIds.includes(i.id)).length;
                     let footer = '';
-                    if (ultimoTesteId) {
-                        footer += '<button type="button" class="btn btn-outline" onclick="desfazerTeste()" id="btn-desfazer" style="color:#dc2626;border-color:#dc2626">Desfazer teste</button>';
+                    if (testeIds.length > 0) {
+                        footer += `<button type="button" class="btn btn-outline" onclick="desfazerTeste()" id="btn-desfazer" style="color:#dc2626;border-color:#dc2626">Desfazer teste (${testeIds.length})</button>`;
                     }
                     footer += '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar e verificar</button>';
                     if (restante > 0) {
                         footer += `<button type="button" class="btn btn-blue" onclick="enviarTodos()" style="margin-left:8px">Enviar os ${restante} restantes</button>`;
                     }
-                    setModal('Teste concluido', html, footer);
+                    setModal(`Teste concluido — ${ok} de ${amostra.length}`, html, footer);
                 } else {
-                    html += `<div class="modal-warn"><strong>Erro no teste:</strong> ${data.erro || 'Erro desconhecido'}</div>`;
+                    html += `<div class="modal-warn"><strong>Erro no teste:</strong> ${(data.erros || []).join(', ') || 'Erro desconhecido'}</div>`;
                     html += '<p style="margin-top:12px">Corrija o problema antes de tentar enviar todos os itens.</p>';
                     setModal('Teste falhou', html,
                         '<button type="button" class="btn btn-outline" onclick="etapa2Preview()">Voltar</button>' +
@@ -955,29 +986,40 @@
             });
         }
 
-        // Desfazer teste — excluir o lancamento de teste do Advbox
+        // Desfazer teste — excluir os lancamentos de teste do Advbox
         function desfazerTeste() {
-            if (!ultimoTesteId) {
+            if (testeIds.length === 0) {
                 showToast('Nenhum item de teste para desfazer', 3000);
                 return;
             }
             const btn = document.getElementById('btn-desfazer');
             if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
 
-            fetch('/api/advbox/excluir/' + ultimoTesteId, { method: 'DELETE' })
+            fetch('/api/advbox/excluir', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ids: testeIds})
+            })
             .then(r => r.json())
             .then(data => {
                 if (data.ok) {
-                    ultimoTesteId = null;
-                    setModal('Teste desfeito',
-                        '<div class="modal-stats"><div class="modal-stat" style="color:#2e7d32">Lancamento de teste excluido do Advbox com sucesso.</div></div>' +
-                        '<p style="margin-top:12px">Voce pode corrigir os dados e testar novamente.</p>',
+                    const n = data.excluidos;
+                    testeIds = [];
+                    testeItensIds = [];
+                    let html = `<div class="modal-stats"><div class="modal-stat" style="color:#2e7d32">${n} lancamento${n !== 1 ? 's' : ''} de teste excluido${n !== 1 ? 's' : ''} do Advbox.</div></div>`;
+                    html += '<p style="margin-top:12px">Voce pode corrigir os dados e testar novamente.</p>';
+                    if (data.erros && data.erros.length > 0) {
+                        html += '<div style="margin-top:8px;padding:10px;background:#fef2f2;border-radius:6px;font-size:13px"><strong>Alguns nao puderam ser excluidos:</strong><ul style="margin:4px 0 0 16px">';
+                        data.erros.forEach(e => { html += `<li>${e}</li>`; });
+                        html += '</ul></div>';
+                    }
+                    setModal('Teste desfeito', html,
                         '<button type="button" class="btn btn-outline" onclick="etapa2Preview()">Voltar ao resumo</button>' +
                         '<button type="button" class="btn btn-outline" onclick="fecharModal()" style="margin-left:8px">Fechar</button>'
                     );
                 } else {
                     setModal('Erro ao desfazer',
-                        `<div class="modal-warn">${data.erro || 'Erro desconhecido'}</div><p style="margin-top:8px">Exclua manualmente o lancamento no Advbox.</p>`,
+                        `<div class="modal-warn">${(data.erros || []).join('<br>') || 'Erro desconhecido'}</div><p style="margin-top:8px">Exclua manualmente os lancamentos no Advbox.</p>`,
                         '<button type="button" class="btn btn-outline" onclick="fecharModal()">Fechar</button>'
                     );
                 }
