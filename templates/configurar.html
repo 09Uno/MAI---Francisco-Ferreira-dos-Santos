@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configurar Advbox - Conciliador</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #f0f2f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+        }
+
+        .card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+            padding: 40px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo h1 { font-size: 22px; color: #1f4e78; }
+        .logo p { color: #666; font-size: 14px; margin-top: 6px; }
+
+        .field { margin-bottom: 24px; }
+        .field label { display: block; font-weight: 600; color: #333; margin-bottom: 8px; font-size: 14px; }
+        .field .hint { font-size: 12px; color: #888; margin-bottom: 8px; }
+
+        .field input[type="text"],
+        .field input[type="password"] {
+            width: 100%;
+            padding: 12px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .field input:focus { outline: none; border-color: #1f4e78; box-shadow: 0 0 0 3px rgba(31,78,120,0.1); }
+
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 24px;
+        }
+
+        .toggle-row .label { font-weight: 600; font-size: 14px; color: #333; }
+        .toggle-row .sub { font-size: 12px; color: #666; margin-top: 2px; }
+
+        .switch { position: relative; width: 48px; height: 26px; flex-shrink: 0; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .switch .slider {
+            position: absolute; inset: 0; background: #d1d5db; border-radius: 26px;
+            cursor: pointer; transition: 0.3s;
+        }
+        .switch .slider::before {
+            content: ''; position: absolute; height: 20px; width: 20px;
+            left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: 0.3s;
+        }
+        .switch input:checked + .slider { background: #16a34a; }
+        .switch input:checked + .slider::before { transform: translateX(22px); }
+
+        .btn {
+            display: inline-block; padding: 12px 24px; border: none; border-radius: 8px;
+            font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.2s;
+        }
+        .btn-primary { background: #1f4e78; color: #fff; }
+        .btn-primary:hover { background: #163b5c; }
+        .btn-primary:disabled { background: #9ca3af; cursor: not-allowed; }
+        .btn-outline { background: #fff; color: #333; border: 1px solid #d1d5db; }
+        .btn-outline:hover { background: #f9fafb; }
+        .btn-test { background: #059669; color: #fff; }
+        .btn-test:hover { background: #047857; }
+
+        .actions { display: flex; gap: 12px; justify-content: space-between; align-items: center; }
+        .actions .left { display: flex; gap: 8px; }
+
+        .divider { height: 1px; background: #e5e7eb; margin: 24px 0; }
+
+        .status-box {
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .status-box.ok { display: block; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+        .status-box.erro { display: block; background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; }
+        .status-box.info { display: block; background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+
+        .status-box ul { margin: 8px 0 0 20px; }
+        .status-box li { margin: 4px 0; }
+
+        .steps {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 32px;
+        }
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 10px 8px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #999;
+            background: #f3f4f6;
+            border-radius: 8px;
+        }
+        .step.active { background: #dbeafe; color: #1f4e78; }
+        .step.done { background: #dcfce7; color: #166534; }
+
+        footer {
+            text-align: center;
+            margin-top: 20px;
+        }
+        footer a { color: #1f4e78; text-decoration: none; font-size: 14px; }
+        footer a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="logo">
+                <h1>Configurar Advbox</h1>
+                <p>Configure a integracao com o Advbox para enviar lancamentos automaticamente</p>
+            </div>
+
+            <div class="steps">
+                <div class="step" id="step-1">1. Token</div>
+                <div class="step" id="step-2">2. Testar</div>
+                <div class="step" id="step-3">3. Ativar</div>
+            </div>
+
+            <div class="field">
+                <label>Token da API do Advbox</label>
+                <div class="hint">Encontre em: Advbox &rarr; Configuracoes &rarr; Integracao &rarr; API Token</div>
+                <input type="password" id="input-token" value="{{ token }}" placeholder="Cole o token aqui...">
+            </div>
+
+            <div class="toggle-row">
+                <div>
+                    <div class="label">Modo de teste (Dry Run)</div>
+                    <div class="sub">Quando ativado, simula o envio sem criar nada no Advbox</div>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="toggle-dry-run" {% if dry_run %}checked{% endif %}>
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div class="divider"></div>
+
+            <div class="actions">
+                <div class="left">
+                    <button class="btn btn-primary" id="btn-salvar" onclick="salvarConfig()">Salvar</button>
+                    <button class="btn btn-test" id="btn-testar" onclick="testarConexao()">Testar conexao</button>
+                </div>
+                <a href="/" class="btn btn-outline">Voltar</a>
+            </div>
+
+            <div class="status-box" id="status-box"></div>
+        </div>
+
+        <footer>
+            <a href="/">&larr; Voltar ao Conciliador</a>
+        </footer>
+    </div>
+
+    <script>
+        function updateSteps() {
+            const token = document.getElementById('input-token').value.trim();
+            const s1 = document.getElementById('step-1');
+            const s2 = document.getElementById('step-2');
+            const s3 = document.getElementById('step-3');
+            s1.className = 'step ' + (token ? 'done' : 'active');
+            s2.className = 'step';
+            s3.className = 'step';
+        }
+        updateSteps();
+        document.getElementById('input-token').addEventListener('input', updateSteps);
+
+        function salvarConfig() {
+            const btn = document.getElementById('btn-salvar');
+            btn.disabled = true;
+            btn.textContent = 'Salvando...';
+
+            const token = document.getElementById('input-token').value.trim();
+            const dryRun = document.getElementById('toggle-dry-run').checked;
+
+            fetch('/api/config/salvar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token: token, dry_run: dryRun})
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.ok) {
+                    showStatus('ok', 'Configuracao salva com sucesso!');
+                    updateSteps();
+                } else {
+                    showStatus('erro', 'Erro ao salvar.');
+                }
+            })
+            .catch(() => showStatus('erro', 'Erro de conexao.'))
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = 'Salvar';
+            });
+        }
+
+        function testarConexao() {
+            const btn = document.getElementById('btn-testar');
+            btn.disabled = true;
+            btn.textContent = 'Testando...';
+            showStatus('info', 'Conectando ao Advbox...');
+
+            // Salvar antes de testar
+            const token = document.getElementById('input-token').value.trim();
+            const dryRun = document.getElementById('toggle-dry-run').checked;
+
+            fetch('/api/config/salvar', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({token: token, dry_run: dryRun})
+            })
+            .then(() => fetch('/api/advbox/status'))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.configurado) {
+                    showStatus('erro', 'Token nao configurado. Cole o token acima e clique em Salvar.');
+                    document.getElementById('step-2').className = 'step';
+                    return;
+                }
+                if (data.erro) {
+                    showStatus('erro', '<strong>Erro:</strong> ' + data.erro + '<br>Verifique se o token esta correto.');
+                    document.getElementById('step-2').className = 'step';
+                    return;
+                }
+
+                let html = '<strong>Conexao OK!</strong> O Advbox respondeu com sucesso.';
+                html += '<ul>';
+                html += '<li><strong>' + data.settings.contas + '</strong> contas</li>';
+                html += '<li><strong>' + data.settings.categorias + '</strong> categorias</li>';
+                html += '<li><strong>' + data.settings.centros_custo + '</strong> centros de custo</li>';
+                html += '</ul>';
+                if (data.contas && data.contas.length > 0) {
+                    html += '<div style="margin-top:8px;font-size:12px;color:#666"><strong>Contas:</strong> ' + data.contas.join(', ') + '</div>';
+                }
+                showStatus('ok', html);
+
+                document.getElementById('step-1').className = 'step done';
+                document.getElementById('step-2').className = 'step done';
+                document.getElementById('step-3').className = 'step active';
+            })
+            .catch(err => showStatus('erro', 'Erro de conexao: ' + err.message))
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = 'Testar conexao';
+            });
+        }
+
+        function showStatus(type, html) {
+            const box = document.getElementById('status-box');
+            box.className = 'status-box ' + type;
+            box.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

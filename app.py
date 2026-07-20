@@ -138,10 +138,29 @@ def _sanitize(name):
     return name
 
 
+CONFIG_PATH = os.path.join(UPLOAD_FOLDER, ".advbox_config.json")
+
+
+def _load_config():
+    if os.path.isfile(CONFIG_PATH):
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+
+def _save_config(cfg):
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+
+
 def _get_advbox_client():
-    """Cria o AdvboxClient com o token do .env."""
-    token = os.environ.get("ADVBOX_TOKEN", "")
-    dry_run = os.environ.get("ADVBOX_DRY_RUN", "true").lower() in ("true", "1", "yes")
+    cfg = _load_config()
+    token = cfg.get("token") or os.environ.get("ADVBOX_TOKEN", "")
+    dry_run_val = cfg.get("dry_run")
+    if dry_run_val is None:
+        dry_run = os.environ.get("ADVBOX_DRY_RUN", "true").lower() in ("true", "1", "yes")
+    else:
+        dry_run = bool(dry_run_val)
     return AdvboxClient(token=token, dry_run=dry_run)
 
 
@@ -151,8 +170,17 @@ def _get_advbox_client():
 
 @app.route("/")
 def index():
-    advbox_token = os.environ.get("ADVBOX_TOKEN", "")
-    return render_template("index.html", advbox_configurado=bool(advbox_token))
+    cfg = _load_config()
+    token = cfg.get("token") or os.environ.get("ADVBOX_TOKEN", "")
+    return render_template("index.html", advbox_configurado=bool(token))
+
+
+@app.route("/configurar")
+def configurar():
+    cfg = _load_config()
+    token = cfg.get("token", "")
+    dry_run = cfg.get("dry_run", True)
+    return render_template("configurar.html", token=token, dry_run=dry_run)
 
 
 @app.route("/conciliar", methods=["POST"])
@@ -283,8 +311,7 @@ def conciliar():
     saida_path = os.path.join(run_dir, saida_nome)
     engine.gerar_planilha(extrato, sistema, saida_path)
 
-    advbox_token = os.environ.get("ADVBOX_TOKEN", "")
-    advbox_dry_run = os.environ.get("ADVBOX_DRY_RUN", "true").lower() in ("true", "1", "yes")
+    _client = _get_advbox_client()
 
     return render_template("resultado.html",
                            itens=itens,
@@ -298,13 +325,25 @@ def conciliar():
                            total_revisao=len(revisao),
                            run_id=run_id,
                            erros=erros,
-                           advbox_configurado=bool(advbox_token),
-                           advbox_dry_run=advbox_dry_run)
+                           advbox_configurado=_client.configurado,
+                           advbox_dry_run=_client.dry_run)
 
 
 # ================================================================
 # ROTAS — API (AJAX)
 # ================================================================
+
+@app.route("/api/config/salvar", methods=["POST"])
+def config_salvar():
+    data = request.json or {}
+    cfg = _load_config()
+    if "token" in data:
+        cfg["token"] = data["token"].strip()
+    if "dry_run" in data:
+        cfg["dry_run"] = bool(data["dry_run"])
+    _save_config(cfg)
+    return jsonify({"ok": True})
+
 
 @app.route("/salvar/<run_id>", methods=["POST"])
 def salvar(run_id):
