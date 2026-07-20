@@ -703,13 +703,8 @@
             <button type="button" class="btn btn-green" id="btn-salvar" onclick="salvarEBaixar()">
                 Salvar e baixar Excel
             </button>
-            <button type="button" class="btn btn-blue" id="btn-advbox" onclick="abrirModalAdvbox()"
-                {% if not advbox_configurado %}disabled title="Configure o ADVBOX_TOKEN no .env"{% endif %}>
-                {% if advbox_configurado %}
-                    Enviar para Advbox {% if advbox_dry_run %}<span class="tag tag-dry-run">DRY RUN</span>{% endif %}
-                {% else %}
-                    Advbox nao configurado
-                {% endif %}
+            <button type="button" class="btn btn-blue" id="btn-advbox" onclick="abrirModalAdvbox()">
+                Enviar para Advbox {% if advbox_dry_run %}<span class="tag tag-dry-run">DRY RUN</span>{% endif %}
             </button>
         </div>
     </div>

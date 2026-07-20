@@ -119,7 +119,7 @@ def _resolver_conta(conta_arquivo: str) -> str:
     for chave, valor in MAPA_CONTA.items():
         if chave in nome:
             return valor
-    return conta_arquivo
+    return ""
 
 
 def _limpar_uploads_antigos():
