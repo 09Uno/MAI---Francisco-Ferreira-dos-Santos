@@ -270,11 +270,17 @@ def carregar_advbox_export(caminho: str) -> list[dict]:
         except (TypeError, ValueError):
             continue
         pg = r.get("Pagamento")
+        conta_cartao = str(r.get("Conta/Cartão", "") or "").strip()
+        centro = str(r.get("Centro de custo", "") or "").strip()
+        setor_un = str(r.get("Setor/Unidade", "") or "").strip()
         out.append({"valor": val,
                     "data": pd.to_datetime(pg, dayfirst=True, errors="coerce"),
                     "descricao": r.get("Descrição", ""),
                     "pessoa": r.get("Partes", ""),
-                    "categoria": r.get("Categoria", "")})
+                    "categoria": r.get("Categoria", ""),
+                    "conta": conta_cartao,
+                    "centro_custo": centro,
+                    "setor": setor_un})
     return out
 
 

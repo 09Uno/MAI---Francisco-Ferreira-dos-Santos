@@ -542,7 +542,17 @@
                             <td>{{ it.data }}</td>
                             <td class="valor">R$ {{ "%.2f"|format(it.valor)|replace(".", ",") }}</td>
                             <td>{{ it.descricao }}</td>
-                            <td>{{ it.conta }}</td>
+                            <td>
+                                <select class="cat-select" data-field="conta">
+                                    <option value="">--</option>
+                                    {% for ct in contas %}
+                                    <option value="{{ ct }}" {% if ct == it.conta %}selected{% endif %}>{{ ct }}</option>
+                                    {% endfor %}
+                                    {% if it.conta and it.conta not in contas %}
+                                    <option value="{{ it.conta }}" selected>{{ it.conta }}</option>
+                                    {% endif %}
+                                </select>
+                            </td>
                             <td><span class="tag tag-{{ it.tipo|lower }}">{{ it.tipo }}</span></td>
                             <td>
                                 <select class="cat-select" data-field="categoria">
@@ -619,7 +629,17 @@
                             <td>{{ it.data }}</td>
                             <td class="valor">R$ {{ "%.2f"|format(it.valor)|replace(".", ",") }}</td>
                             <td>{{ it.descricao }}</td>
-                            <td>{{ it.conta }}</td>
+                            <td>
+                                <select class="cat-select" data-field="conta">
+                                    <option value="">--</option>
+                                    {% for ct in contas %}
+                                    <option value="{{ ct }}" {% if ct == it.conta %}selected{% endif %}>{{ ct }}</option>
+                                    {% endfor %}
+                                    {% if it.conta and it.conta not in contas %}
+                                    <option value="{{ it.conta }}" selected>{{ it.conta }}</option>
+                                    {% endif %}
+                                </select>
+                            </td>
                             <td><span class="tag tag-{{ it.tipo|lower }}">{{ it.tipo }}</span></td>
                             <td>
                                 <select class="cat-select" data-field="categoria">

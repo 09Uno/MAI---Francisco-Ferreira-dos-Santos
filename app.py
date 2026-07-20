@@ -90,6 +90,37 @@ MAPA_CENTRO_CUSTO = {
     "TRANSFERÊNCIA ENTRE CONTAS": "ADMINISTRATIVO",
 }
 
+CONTAS = [
+    "A - BANCO DO BRASIL - SOCIEDADE",
+    "A - CAIXA - ESCRITÓRIO (ESPÉCIE) (SOCIEDADE)",
+    "A - ITAU - SOCIEDADE",
+    "ASAAS",
+    "I - ASAAS - DR. FERREIRA",
+    "I - BANCO DO BRASIL - FRANCISCO",
+    "I - CAIXA - ESCRITÓRIO (ESPÉCIE) (PF)",
+    "I - CAIXA ECONOMICA - DR. FRANCISCO",
+    "S - ASAAS - SERVIÇOS",
+    "S - ITAU - SERVIÇOS",
+]
+
+MAPA_CONTA = {
+    "BB": "I - BANCO DO BRASIL - FRANCISCO",
+    "BANCO DO BRASIL": "I - BANCO DO BRASIL - FRANCISCO",
+    "ITAU": "A - ITAU - SOCIEDADE",
+    "ITAÚ": "A - ITAU - SOCIEDADE",
+    "CAIXA": "I - CAIXA ECONOMICA - DR. FRANCISCO",
+    "ASAAS": "ASAAS",
+}
+
+
+def _resolver_conta(conta_arquivo: str) -> str:
+    """Mapeia o nome do arquivo de extrato para o nome da conta no Advbox."""
+    nome = conta_arquivo.upper().strip()
+    for chave, valor in MAPA_CONTA.items():
+        if chave in nome:
+            return valor
+    return conta_arquivo
+
 
 def _limpar_uploads_antigos():
     """Remove pastas com mais de 2 horas na pasta de uploads."""
@@ -194,7 +225,7 @@ def conciliar():
             "data": mov.data.strftime("%d/%m/%Y"),
             "valor": abs(mov.valor),
             "descricao": mov.descricao,
-            "conta": mov.conta,
+            "conta": l.get("conta", "") or _resolver_conta(mov.conta),
             "tipo": mov.tipo,
             "categoria": l.get("categoria", ""),
             "centro_custo": l.get("centro_custo", ""),
@@ -213,7 +244,7 @@ def conciliar():
             "data": l.vencimento.strftime("%d/%m/%Y"),
             "valor": round(l.valor, 2),
             "descricao": l.descricao,
-            "conta": l.conta,
+            "conta": _resolver_conta(l.conta),
             "tipo": l.tipo,
             "categoria": l.categoria,
             "centro_custo": cc,
@@ -232,7 +263,7 @@ def conciliar():
             "data": mov.data.strftime("%d/%m/%Y"),
             "valor": abs(mov.valor),
             "descricao": mov.descricao,
-            "conta": mov.conta,
+            "conta": _resolver_conta(mov.conta),
             "tipo": mov.tipo,
             "categoria": cat or "",
             "centro_custo": cc_rev,
@@ -258,6 +289,7 @@ def conciliar():
     return render_template("resultado.html",
                            itens=itens,
                            categorias=CATEGORIAS,
+                           contas=CONTAS,
                            centros_custo=CENTROS_CUSTO,
                            setores=SETORES,
                            total_extrato=len(extrato),
