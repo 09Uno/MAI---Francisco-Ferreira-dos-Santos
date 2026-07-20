@@ -248,36 +248,56 @@ def _patch_openpyxl():
     desc_base._patched = True
 
 
+def _col(df, *nomes):
+    """Busca coluna por nome, tolerando variações de acento/encoding."""
+    for col in df.columns:
+        c = norm(str(col))
+        for n in nomes:
+            if norm(n) == c:
+                return col
+    return nomes[0]
+
+
 def carregar_advbox_export(caminho: str) -> list[dict]:
     """Lê o Excel exportado do Financeiro do Advbox e devolve os lançamentos."""
     _patch_openpyxl()
     raw = pd.read_excel(caminho, sheet_name=0, header=None, engine="openpyxl")
     hdr = None
     for i, row in raw.iterrows():
-        vals = [str(c) for c in row.tolist()]
-        if "Categoria" in vals and "Descrição" in vals:
+        vals = [norm(str(c)) for c in row.tolist()]
+        if "CATEGORIA" in vals and ("DESCRICAO" in vals or "TIPO" in vals):
             hdr = i; break
     if hdr is None:
         raise ValueError("Cabeçalho não encontrado no export do Advbox.")
     df = raw.iloc[hdr + 1:].copy()
     df.columns = raw.iloc[hdr].tolist()
-    df = df[df["Tipo"].isin(["RECEITA", "DESPESA"])]
+    col_tipo = _col(df, "Tipo")
+    col_desc = _col(df, "Descrição", "Descricao")
+    col_cat = _col(df, "Categoria")
+    col_partes = _col(df, "Partes")
+    col_pgto = _col(df, "Pagamento")
+    col_vr = _col(df, "Valor recebido")
+    col_vp = _col(df, "Valor pago")
+    col_conta = _col(df, "Conta/Cartão", "Conta/Cartao", "Conta")
+    col_cc = _col(df, "Centro de custo", "Centro de Custo")
+    col_setor = _col(df, "Setor/Unidade", "Setor")
+    df = df[df[col_tipo].isin(["RECEITA", "DESPESA"])]
     out = []
     for _, r in df.iterrows():
-        val = r.get("Valor recebido") if r["Tipo"] == "RECEITA" else r.get("Valor pago")
+        val = r.get(col_vr) if r[col_tipo] == "RECEITA" else r.get(col_vp)
         try:
             val = float(val)
         except (TypeError, ValueError):
             continue
-        pg = r.get("Pagamento")
-        conta_cartao = str(r.get("Conta/Cartão", "") or "").strip()
-        centro = str(r.get("Centro de custo", "") or "").strip()
-        setor_un = str(r.get("Setor/Unidade", "") or "").strip()
+        pg = r.get(col_pgto)
+        conta_cartao = str(r.get(col_conta, "") or "").strip()
+        centro = str(r.get(col_cc, "") or "").strip()
+        setor_un = str(r.get(col_setor, "") or "").strip()
         out.append({"valor": val,
                     "data": pd.to_datetime(pg, dayfirst=True, errors="coerce"),
-                    "descricao": r.get("Descrição", ""),
-                    "pessoa": r.get("Partes", ""),
-                    "categoria": r.get("Categoria", ""),
+                    "descricao": r.get(col_desc, ""),
+                    "pessoa": r.get(col_partes, ""),
+                    "categoria": r.get(col_cat, ""),
                     "conta": conta_cartao,
                     "centro_custo": centro,
                     "setor": setor_un})
