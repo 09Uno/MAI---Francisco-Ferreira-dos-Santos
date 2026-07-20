@@ -61,6 +61,7 @@ class AdvboxClient:
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
             "Accept": "application/json",
+            "User-Agent": "ConciliadorBancario/1.0",
         }
 
     def _request(self, method, endpoint, data=None):
@@ -89,6 +90,14 @@ class AdvboxClient:
                 body = resp.json()
             except Exception:
                 body = resp.text
+            if resp.status_code == 403:
+                raise AdvboxAPIError(403,
+                    "Acesso negado. Verifique se o token da API está correto e completo.",
+                    body)
+            if resp.status_code == 401:
+                raise AdvboxAPIError(401,
+                    "Token inválido ou expirado. Gere um novo token no Advbox.",
+                    body)
             raise AdvboxAPIError(resp.status_code, str(body), body)
 
         if resp.status_code == 204:
