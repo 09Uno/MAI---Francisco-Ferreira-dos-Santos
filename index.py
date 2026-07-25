@@ -44,7 +44,8 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 
 # ------------------------------------------------------------------ CONFIG ----
 PERC_HONORARIOS_PADRAO = 0.30      # 30% — ajustável por processo
-JANELA_DIAS = 5                    # tolerância entre data do extrato e do lançamento
+JANELA_DIAS = 5                    # tolerância entre data do extrato e pagamento do Advbox
+JANELA_VENCIMENTO = 30             # tolerância entre data do extrato e vencimento (para itens em aberto)
 
 # ---------------------------------------------------------------- RULEBOOK ----
 def norm(s) -> str:
@@ -276,6 +277,7 @@ def carregar_advbox_export(caminho: str) -> list[dict]:
     col_cat = _col(df, "Categoria")
     col_partes = _col(df, "Partes")
     col_pgto = _col(df, "Pagamento")
+    col_venc = _col(df, "Vencimento", "Data de vencimento", "Data vencimento")
     col_vr = _col(df, "Valor recebido")
     col_vp = _col(df, "Valor pago")
     col_conta = _col(df, "Conta/Cartão", "Conta/Cartao", "Conta")
@@ -293,8 +295,10 @@ def carregar_advbox_export(caminho: str) -> list[dict]:
         conta_cartao = str(r.get(col_conta, "") or "").strip()
         centro = str(r.get(col_cc, "") or "").strip()
         setor_un = str(r.get(col_setor, "") or "").strip()
+        venc = r.get(col_venc)
         out.append({"valor": val,
                     "data": pd.to_datetime(pg, dayfirst=True, errors="coerce"),
+                    "data_vencimento": pd.to_datetime(venc, dayfirst=True, errors="coerce"),
                     "descricao": r.get(col_desc, ""),
                     "pessoa": r.get(col_partes, ""),
                     "categoria": r.get(col_cat, ""),
@@ -318,8 +322,15 @@ def conciliar(extrato: list[MovExtrato], sistema: list[dict]):
         for i, l in enumerate(sistema):
             if i in usados or abs(abs(l["valor"]) - abs(mov.valor)) > 0.01:
                 continue
-            dt = l["data"]
-            if pd.isna(dt) or abs((dt.to_pydatetime() - mov.data).days) > JANELA_DIAS:
+            dt_pgto = l["data"]
+            dt_venc = l.get("data_vencimento")
+            if not pd.isna(dt_pgto):
+                if abs((dt_pgto.to_pydatetime() - mov.data).days) > JANELA_DIAS:
+                    continue
+            elif dt_venc is not None and not pd.isna(dt_venc):
+                if abs((dt_venc.to_pydatetime() - mov.data).days) > JANELA_VENCIMENTO:
+                    continue
+            else:
                 continue
             s = _fuzzy(l.get("descricao", ""), mov.descricao) + _fuzzy(l.get("pessoa", ""), mov.descricao)
             if s > score:
