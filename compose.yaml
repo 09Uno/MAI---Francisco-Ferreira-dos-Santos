@@ -1,17 +1,17 @@
-name: francisco
+name: conciliador
 
 services:
   app:
     build:
       context: .
-    image: francisco-app:latest
-    container_name: francisco
-    hostname: francisco
+    image: conciliador-app:latest
+    container_name: conciliador
+    hostname: conciliador
     restart: unless-stopped
     env_file:
       - .env
     volumes:
-      - francisco_uploads:/app/uploads
+      - conciliador_uploads:/app/uploads
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:80/ || exit 1"]
       interval: 30s
@@ -26,5 +26,5 @@ networks:
     external: true
 
 volumes:
-  francisco_uploads:
-    name: francisco_uploads
+  conciliador_uploads:
+    name: conciliador_uploads

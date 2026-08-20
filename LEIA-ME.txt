@@ -1,0 +1,53 @@
+CONCILIAÇÃO BANCÁRIA — COMO USAR
+=================================
+
+O que este programa faz:
+  Pega o extrato do banco (arquivo OFX) + a planilha que você já exporta
+  do Financeiro do Advbox, compara os dois e gera uma planilha dizendo:
+    - o que já está no Advbox (é só dar baixa),
+    - o que falta lançar (já classificado, com os 30%/repasse prontos),
+    - o que precisa de revisão humana.
+
+--------------------------------------------------
+PREPARAÇÃO (só uma vez, no computador que vai rodar)
+--------------------------------------------------
+1. Instalar o Python:
+   - Acesse python.org/downloads e baixe a versão para Windows.
+   - Ao instalar, MARQUE a caixinha "Add Python to PATH". Depois clique em Install.
+   (Peça ao pessoal da TI se precisar — leva 2 minutos.)
+
+2. Deixe estes 2 arquivos juntos numa pasta (ex.: uma pasta no Google Drive):
+   - index.py
+   - EXECUTAR_CONCILIACAO.bat
+
+--------------------------------------------------
+TODO MÊS (a rotina)
+--------------------------------------------------
+1. Baixe o EXTRATO de cada conta no formato OFX (no site/app do banco,
+   procure por "exportar OFX" ou "OFX Money"). No Asaas, exporte o extrato.
+
+2. Renomeie cada arquivo OFX com o NOME DA CONTA. O nome do arquivo vira
+   o nome da conta na planilha. Exemplos:
+       BANCO DO BRASIL.ofx
+       ASAAS.ofx
+       ITAU.ofx
+
+3. No Advbox: Menu Financeiro > Exportar > Excel. Salve esse .xlsx na pasta.
+
+4. Coloque TODOS esses arquivos (os .ofx + o export do Advbox) na MESMA pasta
+   onde estão o conciliador_advbox.py e o EXECUTAR_CONCILIACAO.bat.
+
+5. Dê dois cliques em EXECUTAR_CONCILIACAO.bat.
+   Ele gera o arquivo "conciliacao_AAAA-MM-DD.xlsx" e abre sozinho.
+
+--------------------------------------------------
+O QUE VOCÊ RECEBE (a planilha conciliacao_...)
+--------------------------------------------------
+- Aba RESUMO: quantos itens em cada situação e o total a criar.
+- Aba DAR BAIXA: já existe no Advbox -> marque o pagamento com a data do extrato.
+- Aba CRIAR LANÇAMENTO: não existe -> lance no Advbox (mesmas colunas do export).
+      As linhas em AMARELO precisam de conferência (ex.: confirmar % de honorários).
+- Aba REVISAR: casos ambíguos -> você decide a categoria.
+
+IMPORTANTE: nada é lançado sozinho no Advbox. A planilha é seu guia; a digitação
+(ou importação, se o Advbox permitir) continua sendo conferida por uma pessoa.
