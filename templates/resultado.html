@@ -1596,6 +1596,58 @@ table.cl-table tr:last-child td { border-bottom: none; }
             background: #fffbeb;
         }
 
+        /* ---- Busca de cliente (autocomplete) ---- */
+        .cliente-wrap { position: relative; min-width: 160px; }
+        .cliente-input {
+            padding: 4px 8px;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            font-size: 12px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        .cliente-input:focus { outline: none; border-color: #2563eb; }
+        .cliente-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 4px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.15);
+            z-index: 100;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+        }
+        .cliente-dropdown .cl-item {
+            padding: 6px 10px;
+            cursor: pointer;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .cliente-dropdown .cl-item:hover { background: #eff6ff; }
+        .cliente-dropdown .cl-item .cl-name { font-weight: 600; }
+        .cliente-dropdown .cl-item .cl-proc { font-size: 11px; color: #6b7280; }
+        .cliente-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #eff6ff;
+            border: 1px solid #bfdbfe;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+        }
+        .cliente-badge .cl-remove {
+            cursor: pointer;
+            color: #9ca3af;
+            font-weight: bold;
+            margin-left: 4px;
+        }
+        .cliente-badge .cl-remove:hover { color: #ef4444; }
+
         /* ---- Ação select ---- */
         .acao-select {
             padding: 4px 6px;
@@ -2572,6 +2624,7 @@ table.cl-table tr:last-child td { border-bottom: none; }
                             <th>Categoria</th>
                             <th>Centro de Custo</th>
                             <th>Setor/Unidade</th>
+                            <th>Cliente</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2621,6 +2674,19 @@ table.cl-table tr:last-child td { border-bottom: none; }
                                     {% endfor %}
                                 </select>
                             </td>
+                            <td>
+                                <div class="cliente-wrap">
+                                    {% if it.pessoa %}
+                                    <span class="cliente-badge" data-id="{{ it.id }}">
+                                        <span class="cl-name">{{ it.pessoa }}</span>
+                                        <span class="cl-remove" onclick="removerCliente(this)">&times;</span>
+                                    </span>
+                                    {% else %}
+                                    <input type="text" class="cliente-input" placeholder="Buscar cliente..." data-id="{{ it.id }}" autocomplete="off">
+                                    <div class="cliente-dropdown"></div>
+                                    {% endif %}
+                                </div>
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -2658,6 +2724,7 @@ table.cl-table tr:last-child td { border-bottom: none; }
                             <th>Categoria</th>
                             <th>Centro de Custo</th>
                             <th>Setor/Unidade</th>
+                            <th>Cliente</th>
                             <th>Motivo</th>
                         </tr>
                     </thead>
@@ -2708,6 +2775,12 @@ table.cl-table tr:last-child td { border-bottom: none; }
                                     <option value="{{ s }}" {% if s == it.setor %}selected{% endif %}>{{ s }}</option>
                                     {% endfor %}
                                 </select>
+                            </td>
+                            <td>
+                                <div class="cliente-wrap">
+                                    <input type="text" class="cliente-input" placeholder="Buscar cliente..." data-id="{{ it.id }}" autocomplete="off">
+                                    <div class="cliente-dropdown"></div>
+                                </div>
                             </td>
                             <td><span class="tag acao-revisar">{{ it.revisar_nota }}</span></td>
                         </tr>
@@ -2791,6 +2864,110 @@ table.cl-table tr:last-child td { border-bottom: none; }
 
         function updateEditCount() {
             document.getElementById('edit-count').textContent = Object.keys(edicoes).length;
+        }
+
+        // ---- Busca de cliente (autocomplete) ----
+        let clienteTimer = null;
+        document.querySelectorAll('.cliente-input').forEach(input => {
+            input.addEventListener('input', function() {
+                const q = this.value.trim();
+                const dd = this.nextElementSibling;
+                clearTimeout(clienteTimer);
+                if (q.length < 3) { dd.style.display = 'none'; return; }
+                clienteTimer = setTimeout(() => {
+                    fetch('/api/advbox/clientes?nome=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data.ok || !data.clientes.length) {
+                            dd.innerHTML = '<div class="cl-item" style="color:#9ca3af">Nenhum cliente encontrado</div>';
+                            dd.style.display = 'block';
+                            return;
+                        }
+                        dd.innerHTML = '';
+                        data.clientes.forEach(c => {
+                            const procs = (c.lawsuits || []).map(p => p.title || p.id).join(', ');
+                            const div = document.createElement('div');
+                            div.className = 'cl-item';
+                            div.innerHTML = '<div class="cl-name">' + c.name + '</div>' +
+                                (procs ? '<div class="cl-proc">Processos: ' + procs + '</div>' : '');
+                            div.addEventListener('click', () => selecionarCliente(input, c));
+                            dd.appendChild(div);
+                        });
+                        dd.style.display = 'block';
+                    })
+                    .catch(() => { dd.style.display = 'none'; });
+                }, 400);
+            });
+            input.addEventListener('blur', function() {
+                setTimeout(() => { this.nextElementSibling.style.display = 'none'; }, 200);
+            });
+            input.addEventListener('focus', function() {
+                if (this.value.trim().length >= 3) this.dispatchEvent(new Event('input'));
+            });
+        });
+
+        function selecionarCliente(input, cliente) {
+            const id = input.dataset.id;
+            if (!edicoes[id]) edicoes[id] = {};
+            edicoes[id].customers_id = cliente.id;
+            edicoes[id].pessoa = cliente.name;
+            if (cliente.lawsuits && cliente.lawsuits.length === 1) {
+                edicoes[id].lawsuits_id = cliente.lawsuits[0].id;
+            }
+            const wrap = input.closest('.cliente-wrap');
+            wrap.innerHTML = '<span class="cliente-badge" data-id="' + id + '">' +
+                '<span class="cl-name">' + cliente.name + '</span>' +
+                '<span class="cl-remove" onclick="removerCliente(this)">&times;</span></span>';
+            const tr = wrap.closest('tr');
+            if (tr) tr.classList.add('edited');
+            updateEditCount();
+        }
+
+        function removerCliente(btn) {
+            const badge = btn.closest('.cliente-badge');
+            const id = badge.dataset.id;
+            if (edicoes[id]) {
+                delete edicoes[id].customers_id;
+                delete edicoes[id].lawsuits_id;
+                delete edicoes[id].pessoa;
+            }
+            const wrap = badge.closest('.cliente-wrap');
+            wrap.innerHTML = '<input type="text" class="cliente-input" placeholder="Buscar cliente..." data-id="' + id + '" autocomplete="off">' +
+                '<div class="cliente-dropdown"></div>';
+            const newInput = wrap.querySelector('.cliente-input');
+            newInput.addEventListener('input', function() {
+                const q = this.value.trim();
+                const dd = this.nextElementSibling;
+                clearTimeout(clienteTimer);
+                if (q.length < 3) { dd.style.display = 'none'; return; }
+                clienteTimer = setTimeout(() => {
+                    fetch('/api/advbox/clientes?nome=' + encodeURIComponent(q))
+                    .then(r => r.json())
+                    .then(data => {
+                        if (!data.ok || !data.clientes.length) {
+                            dd.innerHTML = '<div class="cl-item" style="color:#9ca3af">Nenhum cliente encontrado</div>';
+                            dd.style.display = 'block';
+                            return;
+                        }
+                        dd.innerHTML = '';
+                        data.clientes.forEach(c => {
+                            const procs = (c.lawsuits || []).map(p => p.title || p.id).join(', ');
+                            const div = document.createElement('div');
+                            div.className = 'cl-item';
+                            div.innerHTML = '<div class="cl-name">' + c.name + '</div>' +
+                                (procs ? '<div class="cl-proc">Processos: ' + procs + '</div>' : '');
+                            div.addEventListener('click', () => selecionarCliente(newInput, c));
+                            dd.appendChild(div);
+                        });
+                        dd.style.display = 'block';
+                    })
+                    .catch(() => { dd.style.display = 'none'; });
+                }, 400);
+            });
+            newInput.addEventListener('blur', function() {
+                setTimeout(() => { this.nextElementSibling.style.display = 'none'; }, 200);
+            });
+            updateEditCount();
         }
 
         function showToast(msg, duration) {
