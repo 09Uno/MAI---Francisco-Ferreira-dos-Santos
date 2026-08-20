@@ -243,6 +243,7 @@ def conciliar():
         client = _get_advbox_client()
         if client.configurado:
             try:
+                client.carregar_settings()
                 datas = [m.data for m in extrato]
                 dt_min = (min(datas) - timedelta(days=60)).strftime("%Y-%m-%d")
                 dt_max = (max(datas) + timedelta(days=30)).strftime("%Y-%m-%d")
@@ -559,6 +560,34 @@ def advbox_excluir():
         "excluidos": excluidos,
         "erros": erros,
     })
+
+
+@app.route("/api/advbox/clientes")
+def advbox_clientes():
+    """Busca clientes no Advbox por nome (para vincular ao lançamento)."""
+    client = _get_advbox_client()
+    if not client.configurado:
+        return jsonify({"ok": False, "erro": "Token não configurado"}), 400
+
+    nome = request.args.get("nome", "").strip()
+    if len(nome) < 3:
+        return jsonify({"ok": True, "clientes": []})
+
+    try:
+        clientes = client.buscar_cliente(nome, limit=10)
+        resultado = []
+        for c in clientes:
+            resultado.append({
+                "id": c.get("id"),
+                "name": c.get("name", ""),
+                "lawsuits": [
+                    {"id": p.get("id"), "title": p.get("title", "")}
+                    for p in c.get("lawsuits", [])
+                ],
+            })
+        return jsonify({"ok": True, "clientes": resultado})
+    except Exception as e:
+        return jsonify({"ok": False, "erro": str(e)}), 500
 
 
 @app.route("/download/<run_id>/<nome>")
