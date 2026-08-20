@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Conciliador bancário — Escritório F. Ferreira Advogados / Advbox (sem API)
-=========================================================================
+Conciliador bancário — Advbox (sem API)
+=======================================
 Fluxo (100% baseado em arquivo, sem integração via API):
 
     OFX do banco  +  Export do Financeiro do Advbox (.xlsx)
@@ -17,8 +17,8 @@ Fluxo (100% baseado em arquivo, sem integração via API):
           • REVISAR          -> casos ambíguos / sem regra
 
 Como usar:
-    ext  = carregar_ofx("extrato_bb_abril.ofx", "I - BANCO DO BRASIL - FRANCISCO")
-    ext += carregar_ofx("extrato_asaas.ofx",    "I - ASAAS - DR. FERREIRA")
+    ext  = carregar_ofx("extrato_bb_abril.ofx", "BANCO DO BRASIL")
+    ext += carregar_ofx("extrato_asaas.ofx",    "ASAAS")
     sistema = carregar_advbox_export("Advbox-MOVIMENTACAO-ABRIL.xlsx")
     gerar_planilha(ext, sistema, "conciliacao_abril.xlsx")
 """
@@ -308,6 +308,40 @@ def carregar_advbox_export(caminho: str) -> list[dict]:
     return out
 
 
+def carregar_advbox_api(transacoes_api: list[dict]) -> list[dict]:
+    """Converte transações da API do Advbox para o formato do matching."""
+    out = []
+    for t in transacoes_api:
+        tipo = "RECEITA" if t.get("entry_type") == "income" else "DESPESA"
+        val = t.get("amount")
+        try:
+            if isinstance(val, str):
+                val = float(val.replace(".", "").replace(",", "."))
+            else:
+                val = float(val or 0)
+        except (TypeError, ValueError):
+            continue
+
+        dt_pgto = pd.to_datetime(t.get("date_payment"), errors="coerce")
+        dt_venc = pd.to_datetime(t.get("date_due"), errors="coerce")
+
+        out.append({
+            "valor": val,
+            "data": dt_pgto,
+            "data_vencimento": dt_venc,
+            "descricao": t.get("description", ""),
+            "pessoa": t.get("name", ""),
+            "categoria": t.get("category", ""),
+            "conta": t.get("debit_bank", ""),
+            "centro_custo": t.get("cost_center", ""),
+            "setor": "",
+            "advbox_id": t.get("id"),
+            "customers_id": None,
+            "lawsuits_id": t.get("lawsuit_id"),
+        })
+    return out
+
+
 # --------------------------------------------------------------- MATCHING -----
 def _fuzzy(a: str, b: str) -> float:
     A, B = set(norm(a).split()), set(norm(b).split())
@@ -466,7 +500,7 @@ def executar_pasta(pasta: str = "."):
     ofx_files = glob.glob(os.path.join(pasta, "*.ofx"))
     if not ofx_files and not glob.glob(os.path.join(pasta, "*.pdf")):
         print("⚠ Nenhum extrato (.ofx ou .pdf) encontrado nesta pasta.")
-        print("  Coloque aqui o(s) extrato(s) do banco (ex.: 'BB Francisco.ofx').")
+        print("  Coloque aqui o(s) extrato(s) do banco (ex.: 'BANCO DO BRASIL.ofx').")
         return
 
     extrato = []

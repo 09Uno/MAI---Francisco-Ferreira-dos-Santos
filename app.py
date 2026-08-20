@@ -6,7 +6,7 @@ Interface web para o Conciliador Bancário — Advbox
 import json
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 from flask import (Flask, render_template, request, redirect, url_for,
@@ -15,6 +15,9 @@ from flask import (Flask, render_template, request, redirect, url_for,
 # importa o motor de conciliação e o client da API
 import index as engine
 from advbox_client import AdvboxClient
+
+import logging
+logger = logging.getLogger(__name__)
 
 load_dotenv()  # carrega .env (ADVBOX_TOKEN)
 
@@ -90,25 +93,21 @@ MAPA_CENTRO_CUSTO = {
     "TRANSFERÊNCIA ENTRE CONTAS": "ADMINISTRATIVO",
 }
 
+# Contas do Advbox (exemplos genéricos — ajuste para as contas do seu escritório).
 CONTAS = [
-    "A - BANCO DO BRASIL - SOCIEDADE",
-    "A - CAIXA - ESCRITÓRIO (ESPÉCIE) (SOCIEDADE)",
-    "A - ITAU - SOCIEDADE",
+    "BANCO DO BRASIL",
+    "CAIXA ECONÔMICA",
+    "ITAÚ",
     "ASAAS",
-    "I - ASAAS - DR. FERREIRA",
-    "I - BANCO DO BRASIL - FRANCISCO",
-    "I - CAIXA - ESCRITÓRIO (ESPÉCIE) (PF)",
-    "I - CAIXA ECONOMICA - DR. FRANCISCO",
-    "S - ASAAS - SERVIÇOS",
-    "S - ITAU - SERVIÇOS",
 ]
 
+# Mapeia uma palavra-chave do nome do arquivo de extrato → nome da conta no Advbox.
 MAPA_CONTA = {
-    "BB": "I - BANCO DO BRASIL - FRANCISCO",
-    "BANCO DO BRASIL": "I - BANCO DO BRASIL - FRANCISCO",
-    "ITAU": "A - ITAU - SOCIEDADE",
-    "ITAÚ": "A - ITAU - SOCIEDADE",
-    "CAIXA": "I - CAIXA ECONOMICA - DR. FRANCISCO",
+    "BB": "BANCO DO BRASIL",
+    "BANCO DO BRASIL": "BANCO DO BRASIL",
+    "ITAU": "ITAÚ",
+    "ITAÚ": "ITAÚ",
+    "CAIXA": "CAIXA ECONÔMICA",
     "ASAAS": "ASAAS",
 }
 
@@ -206,21 +205,19 @@ def conciliar():
             f.save(path)
             extrato_paths.append(path)
 
-    # --- Advbox export é opcional ---
+    # --- Carregar dados do Advbox (Excel ou API) ---
     sistema = []
-    erro_advbox = None
+    extrato = []
+    erros = []
+    usou_api_advbox = False
+
     if advbox_file and advbox_file.filename:
         advbox_path = os.path.join(run_dir, advbox_file.filename)
         advbox_file.save(advbox_path)
         try:
             sistema = engine.carregar_advbox_export(advbox_path)
         except Exception as e:
-            erro_advbox = f"Não foi possível ler o export do Advbox: {e}. Continuando sem matching."
-
-    extrato = []
-    erros = []
-    if erro_advbox:
-        erros.append(erro_advbox)
+            erros.append(f"Não foi possível ler o export do Advbox: {e}. Continuando sem matching.")
 
     for path in extrato_paths:
         nome = os.path.splitext(os.path.basename(path))[0]
@@ -241,6 +238,21 @@ def conciliar():
         flash("Nenhum movimento encontrado nos extratos enviados.", "error")
         return redirect(url_for("index"))
 
+    # --- Se não teve Excel do Advbox, buscar via API ---
+    if not sistema:
+        client = _get_advbox_client()
+        if client.configurado:
+            try:
+                datas = [m.data for m in extrato]
+                dt_min = (min(datas) - timedelta(days=60)).strftime("%Y-%m-%d")
+                dt_max = (max(datas) + timedelta(days=30)).strftime("%Y-%m-%d")
+                abertas = client.listar_transacoes_abertas(dt_min, dt_max)
+                sistema = engine.carregar_advbox_api(abertas)
+                usou_api_advbox = True
+                logger.info(f"Advbox API: {len(sistema)} transações em aberto carregadas")
+            except Exception as e:
+                erros.append(f"Não foi possível consultar o Advbox: {e}")
+
     # --- Conciliar ---
     baixas, novos, revisao = engine.conciliar(extrato, sistema)
 
@@ -250,6 +262,7 @@ def conciliar():
         itens.append({
             "id": f"b-{i}",
             "acao": "baixa",
+            "advbox_id": l.get("advbox_id"),
             "data": mov.data.strftime("%d/%m/%Y"),
             "valor": abs(mov.valor),
             "descricao": mov.descricao,
@@ -311,12 +324,19 @@ def conciliar():
     saida_path = os.path.join(run_dir, saida_nome)
     engine.gerar_planilha(extrato, sistema, saida_path)
 
-    _client = _get_advbox_client()
+    if not usou_api_advbox:
+        _client = _get_advbox_client()
+    else:
+        _client = client
+
+    contas_lista = CONTAS
+    if _client.configurado and _client.settings_carregados:
+        contas_lista = sorted(_client.contas.keys())
 
     return render_template("resultado.html",
                            itens=itens,
                            categorias=CATEGORIAS,
-                           contas=CONTAS,
+                           contas=contas_lista,
                            centros_custo=CENTROS_CUSTO,
                            setores=SETORES,
                            total_extrato=len(extrato),
@@ -326,7 +346,8 @@ def conciliar():
                            run_id=run_id,
                            erros=erros,
                            advbox_configurado=_client.configurado,
-                           advbox_dry_run=_client.dry_run)
+                           advbox_dry_run=_client.dry_run,
+                           usou_api_advbox=usou_api_advbox)
 
 
 # ================================================================

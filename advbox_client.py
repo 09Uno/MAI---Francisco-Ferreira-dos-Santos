@@ -66,7 +66,7 @@ class AdvboxClient:
             "User-Agent": "ConciliadorBancario/1.0",
         }
 
-    def _request(self, method, endpoint, data=None):
+    def _request(self, method, endpoint, data=None, params=None):
         """Faz uma requisição à API. Em dry_run, loga e retorna sem postar."""
         url = f"{BASE_URL}{endpoint}"
 
@@ -83,7 +83,7 @@ class AdvboxClient:
 
         try:
             resp = requests.request(method, url, headers=self._headers(),
-                                    json=data, timeout=30)
+                                    json=data, params=params, timeout=30)
         except requests.RequestException as e:
             raise AdvboxAPIError(0, f"Erro de conexão: {e}")
 
@@ -178,11 +178,56 @@ class AdvboxClient:
         return cid
 
     # ----------------------------------------------------------------
+    # GET /transactions — listar transações (para matching)
+    # ----------------------------------------------------------------
+    def listar_transacoes(self, date_due_start=None, date_due_end=None,
+                           debit_bank=None, limit=1000, offset=0):
+        params = {"limit": limit, "offset": offset}
+        if date_due_start:
+            params["date_due_start"] = date_due_start
+        if date_due_end:
+            params["date_due_end"] = date_due_end
+        if debit_bank:
+            params["debit_bank"] = debit_bank
+        return self._request("GET", "/transactions", params=params)
+
+    def listar_transacoes_abertas(self, date_due_start, date_due_end):
+        """Busca todas as transações em aberto (sem pagamento) no período."""
+        abertas = []
+        offset = 0
+        while True:
+            resp = self.listar_transacoes(
+                date_due_start=date_due_start,
+                date_due_end=date_due_end,
+                limit=1000, offset=offset)
+            dados = resp.get("data", [])
+            for t in dados:
+                if not t.get("date_payment"):
+                    abertas.append(t)
+            total = resp.get("totalCount", 0)
+            offset += len(dados)
+            if offset >= total or not dados:
+                break
+        logger.info(f"Transações abertas encontradas: {len(abertas)} "
+                    f"(de {offset} total no período)")
+        return abertas
+
+    # ----------------------------------------------------------------
+    # GET /customers — buscar cliente por nome
+    # ----------------------------------------------------------------
+    def buscar_cliente(self, nome, limit=5):
+        if not nome:
+            return []
+        resp = self._request("GET", "/customers", params={"name": nome, "limit": limit})
+        return resp.get("data", [])
+
+    # ----------------------------------------------------------------
     # POST /transactions — criar lançamento
     # ----------------------------------------------------------------
     def criar_lancamento(self, tipo, categoria, descricao, valor,
                          data_vencimento, data_pagamento=None,
                          conta=None, centro_custo=None, setor=None,
+                         customers_id=None, lawsuits_id=None,
                          **_kwargs):
         conta_id = self._resolver_id(self.contas, conta, "Conta")
         categoria_id = self._resolver_id(self.categorias, categoria, "Categoria")
@@ -213,6 +258,10 @@ class AdvboxClient:
             payload["sectors_id"] = setor_id
         if data_pagamento:
             payload["date_payment"] = _formatar_data(data_pagamento)
+        if customers_id:
+            payload["customers_id"] = customers_id
+        if lawsuits_id:
+            payload["lawsuits_id"] = lawsuits_id
 
         return self._request("POST", "/transactions", payload)
 
@@ -295,6 +344,8 @@ class AdvboxClient:
                         conta=item.get("conta"),
                         centro_custo=item.get("centro_custo"),
                         setor=item.get("setor"),
+                        customers_id=item.get("customers_id"),
+                        lawsuits_id=item.get("lawsuits_id"),
                     )
                     resultados["sucesso"].append({
                         "id": item.get("id"),
